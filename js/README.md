@@ -10,6 +10,9 @@ ruff presets for Python. All three share one version number.
 pnpm add -D @matchory/coding-style
 ```
 
+Published to both npmjs and GitHub Packages as identical bytes, so it resolves whichever registry your
+`.npmrc` maps the `@matchory` scope to. npmjs is canonical and carries provenance.
+
 ```ts
 // oxfmt.config.ts
 import { oxfmtBase } from '@matchory/coding-style/oxfmt';

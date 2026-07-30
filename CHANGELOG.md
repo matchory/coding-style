@@ -65,6 +65,10 @@ ecosystems, so a malicious version would run in our CI and on developer machines
 
 - OIDC **trusted publishing** on both npm and PyPI. No long-lived registry credential exists in this
   repository.
+- The npm package is published to **npmjs and GitHub Packages** from the same attested tarball. npm
+  resolves registries per scope with no per-package override, and `@matchory/ui` is on GitHub Packages,
+  so a repository consuming both has to point the whole scope at one registry. npmjs is canonical and
+  carries the provenance statement.
 - npm artefacts carry [provenance](https://docs.npmjs.com/generating-provenance-statements); PyPI
   artefacts carry [PEP 740](https://peps.python.org/pep-0740/) attestations. Both also get GitHub
   artefact attestations, verifiable with `gh attestation verify <file> --repo matchory/coding-style`.

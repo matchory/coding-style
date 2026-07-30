@@ -17,6 +17,11 @@ name: Release
 #      build cannot forge, and the registries are configured to require it.
 #   6. No third-party actions in the publish path. Only actions/* and pypa/*.
 #
+# The npm tarball goes to two registries. npm resolves registries per scope with no per-package
+# override, and `@matchory/ui` lives on GitHub Packages, so a repository consuming both must point
+# the whole scope at one place. Publishing identical bytes to npmjs and GitHub Packages makes either
+# mapping work. npmjs is canonical and is the copy that carries provenance.
+#
 # Packagist is absent on purpose: it reads tags from this repository and builds nothing, so there is
 # no artefact to attest. Composer has no provenance mechanism, which makes the signed tag and the
 # repository's branch protection the whole of its supply-chain story. See SECURITY.md.
@@ -344,7 +349,7 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if npm view @matchory/coding-style version --registry https://registry.npmjs.org > /dev/null 2>&1; then
+          if npm view @matchory/coding-style version --@matchory:registry=https://registry.npmjs.org > /dev/null 2>&1; then
             exists=true
           else
             exists=false
@@ -366,18 +371,30 @@ jobs:
             echo 'Publishing via OIDC trusted publishing'
           fi
 
-      # `publishConfig.registry` in package.json does NOT win over an `@scope:registry` entry in an
-      # .npmrc, and npm's provenance code does not validate which registry it is publishing to. So a
-      # stray scope mapping — a developer's ~/.npmrc, a repository .npmrc added later, setup-node's
-      # registry wiring — could redirect a provenance-signed release to another registry entirely.
-      # Pinning --registry on the command line removes that vector, and this asserts it took effect.
-      - name: The resolved publish registry is npmjs
+      # For a SCOPED package npm resolves the registry from `@scope:registry`, and only falls back to
+      # the generic `registry` key. `--registry` sets the generic key, so it loses to any
+      # `@matchory:registry` entry — in a developer .npmrc, a repository .npmrc, or setup-node's
+      # config. This was verified the hard way: a publish with `--registry https://registry.npmjs.org`
+      # went to GitHub Packages instead, because a scope mapping outranked it.
+      #
+      # `--@matchory:registry=` sets the key that actually wins. npm's provenance code does not
+      # validate the destination registry at all, so without this a provenance-signed release could
+      # land somewhere unintended.
+      - name: Confirm the publish target is npmjs
         run: |
-          resolved="$(npm config get @matchory:registry)"
+          target="$(npm publish ./dist/*.tgz \
+            --dry-run \
+            --@matchory:registry=https://registry.npmjs.org \
+            --access public \
+            --tag '${{ needs.verify.outputs.dist_tag }}' 2>&1 \
+            | grep -oE 'Publishing to [^ ]+' | head -1)"
 
-          if [ "${resolved}" != 'undefined' ] && [ "${resolved#https://registry.npmjs.org}" = "${resolved}" ]; then
-            echo "::warning::@matchory:registry resolves to ${resolved}; --registry overrides it for this publish"
-          fi
+          echo "${target:-<no target reported>}"
+
+          case "${target}" in
+            *'https://registry.npmjs.org'*) echo 'Target confirmed: npmjs' ;;
+            *) echo "::error::resolved publish target is not npmjs (${target:-unknown}); refusing to publish"; exit 1 ;;
+          esac
 
       - name: Publish
         env:
@@ -389,13 +406,64 @@ jobs:
           fi
 
           npm publish ./dist/*.tgz \
-            --registry https://registry.npmjs.org \
+            --@matchory:registry=https://registry.npmjs.org \
             --provenance \
             --access public \
             --tag '${{ needs.verify.outputs.dist_tag }}'
 
           # Leave nothing behind on the runner even though it is ephemeral.
           npm config delete '//registry.npmjs.org/:_authToken' || true
+
+  publish-github-packages:
+    name: Publish to GitHub Packages
+    needs: [verify, build-npm, publish-npm]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Pin npm
+        run: npm install -g "npm@${NPM_VERSION}"
+
+      - name: Download the attested tarball
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: npm-tarball
+          path: dist
+
+      # Byte-identical to what npmjs received, and to what was attested.
+      - name: Checksum matches what was attested
+        run: |
+          cd dist
+          sha256sum --check ./*.sha256
+
+      # npm resolves a registry per SCOPE, with no per-package override. `@matchory/ui` is published
+      # here because it is proprietary, so any repository consuming it maps the whole `@matchory` scope
+      # to GitHub Packages — and would therefore never find this package on npmjs. Publishing the same
+      # tarball to both registries is what makes the scope work either way.
+      #
+      # npmjs remains canonical: it is public, carries the provenance statement, and is what external
+      # consumers and the README point at.
+      - name: Publish
+        env:
+          GH_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm config set '//npm.pkg.github.com/:_authToken' "${GH_PACKAGES_TOKEN}"
+
+          # --provenance is deliberately omitted. GitHub Packages neither displays nor verifies npm
+          # provenance statements, and the same bytes already carry one on npmjs plus a GitHub artefact
+          # attestation. Generating a second statement here would add a claim nobody can check.
+          npm publish ./dist/*.tgz \
+            --@matchory:registry=https://npm.pkg.github.com \
+            --tag '${{ needs.verify.outputs.dist_tag }}'
+
+          npm config delete '//npm.pkg.github.com/:_authToken' || true
 
   publish-pypi:
     name: Publish to PyPI
@@ -428,7 +496,7 @@ jobs:
 
   github-release:
     name: Publish the GitHub release
-    needs: [verify, publish-npm, publish-pypi]
+    needs: [verify, publish-npm, publish-github-packages, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write

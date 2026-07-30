@@ -238,8 +238,16 @@ repository, like not using Rector at all.
 pnpm add -D @matchory/coding-style
 ```
 
-Published to GitHub Packages. Consumers need `@matchory:registry=https://npm.pkg.github.com` in
-`.npmrc`, same as `@matchory/ui`.
+Published to **both npmjs and GitHub Packages**, as identical bytes from the same attested tarball, so
+it resolves whichever way your `.npmrc` points the `@matchory` scope.
+
+That is not redundancy for its own sake. npm resolves a registry per *scope* and has no per-package
+override, and `@matchory/ui` is proprietary so it lives on GitHub Packages. A repository consuming both
+must therefore point the whole scope at one registry. Publishing to both is what lets it.
+
+npmjs is canonical: it is public, and it is the copy that carries
+[provenance](https://docs.npmjs.com/generating-provenance-statements). Prefer it unless you already map
+the scope to GitHub Packages for `@matchory/ui`.
 
 ESLint plugins are regular `dependencies` so their versions are pinned centrally — that is the point
 of the package. The tools themselves (`eslint`, `oxlint`, `oxfmt`, `typescript`) are optional peer
