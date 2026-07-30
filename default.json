@@ -5,7 +5,8 @@
     "Extend it by name rather than copying, the same way the style presets work:",
     "  { \"extends\": [\"github>matchory/coding-style\"] }",
     "Ecosystem presets live alongside it and are extended by path:",
-    "  { \"extends\": [\"github>matchory/coding-style\", \"github>matchory/coding-style//renovate/php\"] }"
+    "  { \"extends\": [\"github>matchory/coding-style\", \"github>matchory/coding-style//renovate/php\"] }",
+    "Sets a repository-wide minimumReleaseAge cooldown. Most malicious npm and PyPI releases are detected and yanked within hours, so waiting a few days converts that class of supply-chain attack into a non-event without anyone needing to be watching at the right moment."
   ],
   "extends": [
     "config:recommended",
@@ -15,17 +16,29 @@
     "github>matchory/coding-style//renovate/coding-style-consumer"
   ],
   "timezone": "Europe/Berlin",
-  "schedule": ["* 0-6 * * 1"],
+  "schedule": [
+    "* 0-6 * * 1"
+  ],
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
   "rebaseWhen": "conflicted",
-  "labels": ["dependencies"],
+  "minimumReleaseAge": "5 days",
+  "internalChecksFilter": "strict",
+  "labels": [
+    "dependencies"
+  ],
   "commitMessageAction": "bump",
   "packageRules": [
     {
       "description": "Development tooling is low risk and high noise, so batch it into one PR.",
-      "matchDepTypes": ["devDependencies", "require-dev"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepTypes": [
+        "devDependencies",
+        "require-dev"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupName": "dev tooling (non-major)"
     },
     {
@@ -33,7 +46,9 @@
         "GitHub Actions are pinned by tag and bumped together. Renovate cannot tell a breaking",
         "action major from a safe one, so these stay separate from the code dependencies."
       ],
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "github actions"
     },
     {
@@ -51,10 +66,14 @@
         "ruff",
         "typescript"
       ],
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "automerge": false,
       "minimumReleaseAge": "7 days",
-      "addLabels": ["reformat-risk"]
+      "addLabels": [
+        "reformat-risk"
+      ]
     }
   ],
   "vulnerabilityAlerts": {
@@ -64,8 +83,12 @@
       "PRs for advisories, so they do not duplicate Renovate's version updates. Do NOT also enable",
       "Dependabot *version* updates (a dependabot.yml with `schedule`), or every bump arrives twice."
     ],
-    "labels": ["security"],
-    "schedule": ["at any time"],
+    "labels": [
+      "security"
+    ],
+    "schedule": [
+      "at any time"
+    ],
     "prCreation": "immediate",
     "minimumReleaseAge": null
   },

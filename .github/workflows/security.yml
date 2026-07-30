@@ -1,0 +1,141 @@
+name: Security
+
+# Static analysis and supply-chain checks that are not part of the preset verification in ci.yml.
+#
+# Every action is pinned to a full commit SHA. CodeQL covers the JavaScript and Python sources; it has
+# no PHP analyser, so the PHP presets rely on PHPStan in ci.yml instead.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Catch newly published advisories against code that has not changed. Off-peak, midweek.
+    - cron: '27 4 * * 3'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python, actions]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Initialise
+        uses: github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality is broader than the default security-extended and worth the extra
+          # runtime on a repository this small.
+          queries: security-and-quality
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      # Blocks a pull request that introduces a dependency with a known advisory, or one whose licence
+      # is incompatible with shipping an MIT package.
+      - name: Review
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure
+          deny-licenses: AGPL-1.0-or-later, AGPL-3.0-or-later, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, SSPL-1.0
+
+  scorecard:
+    name: OpenSSF Scorecard
+    # Skipped on pull requests: the action needs to write to the security dashboard, which a fork PR
+    # cannot be granted.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publishes the score so the badge resolves and the result is independently checkable.
+          publish_results: true
+
+      - name: Upload to the security dashboard
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
+        with:
+          sarif_file: results.sarif
+
+  pinned-actions:
+    name: Actions are pinned to commit SHAs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      # A tag is mutable: whoever controls the action's repository can move it to different code, and
+      # that code runs with this repository's token. Scorecard checks this too, but a hard failure
+      # here is what actually keeps it true.
+      - name: Check every `uses:` is a 40-character SHA
+        run: |
+          status=0
+
+          while IFS= read -r line; do
+            reference="${line#*uses:}"
+            reference="$(printf '%s' "${reference}" | tr -d ' ' | cut -d'#' -f1)"
+
+            # Local composite actions and docker refs are out of scope.
+            case "${reference}" in
+              ./*|docker://*) continue ;;
+            esac
+
+            version="${reference##*@}"
+
+            if ! printf '%s' "${version}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "::error::unpinned action: ${reference}"
+              status=1
+            fi
+          done < <(grep -rhE '^\s*-?\s*uses:' .github/workflows/)
+
+          if [ "${status}" -eq 0 ]; then
+            echo "All actions are pinned to commit SHAs"
+          fi
+
+          exit "${status}"

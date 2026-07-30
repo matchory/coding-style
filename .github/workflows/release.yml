@@ -1,100 +1,386 @@
 name: Release
 
-# Publishing is driven by tags. The three packages deliberately share one version line: Composer
-# requires a semver-parseable tag at the repository root, so prefixed tags like `php/v1.2.0` are not
-# an option. A change touching only one ecosystem still bumps the version the others see.
+# Publishing is driven by signed tags, and every registry that supports it receives a cryptographic
+# attestation tying the artefact to this workflow run and this commit.
 #
-# Only the npm package needs an explicit publish step:
+# Design rules, all deliberate:
 #
-#   - Composer: Repman reads tags from the repository. Configure its webhook once and every tag is
-#     picked up with no workflow involvement.
-#   - Python: consumers install from git at a tag, so there is nothing to upload.
+#   1. No long-lived credentials anywhere. npm and PyPI both authenticate via OIDC trusted
+#      publishing, so there is no token in this repository to steal.
+#   2. Build once, attest, then publish that exact artefact. A publish step cannot substitute
+#      different content for what was attested.
+#   3. `permissions: {}` at the top level. Every job opts in to the minimum it needs, and only the
+#      publish jobs get `id-token: write`.
+#   4. Every action is pinned to a full commit SHA. A moved tag cannot change what runs.
+#   5. The publish jobs run in the `release` environment, which requires a human approval and is
+#      restricted to `v*` tags. The OIDC token therefore carries an environment claim that a branch
+#      build cannot forge, and the registries are configured to require it.
+#   6. No third-party actions in the publish path. Only actions/* and pypa/*.
+#
+# Packagist is absent on purpose: it reads tags from this repository and builds nothing, so there is
+# no artefact to attest. Composer has no provenance mechanism, which makes the signed tag and the
+# repository's branch protection the whole of its supply-chain story. See SECURITY.md.
+
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      dry-run:
-        description: Pack the npm tarball without publishing
-        type: boolean
-        default: true
 
-permissions:
-  contents: read
-  packages: write
+permissions: {}
+
+env:
+  # Trusted publishing needs npm 11.5.1 or newer. setup-node bundles whatever shipped with the Node
+  # release, so the version is pinned explicitly rather than left to chance.
+  NPM_VERSION: '11'
 
 jobs:
   verify:
-    name: Verify the tag matches the manifests
+    name: Verify the tag
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - id: version
-        name: Resolve version
+        name: Resolve version from the tag
         run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            version="${GITHUB_REF_NAME#v}"
-          else
-            version="$(node -p "require('./js/package.json').version")"
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "Releasing ${version}"
+          version="${GITHUB_REF_NAME#v}"
 
-      # A tag that disagrees with the manifests would publish an npm version nobody can correlate
-      # with the Composer or Python one, which defeats the shared version line.
-      - name: Manifest versions agree with the tag
+          if ! printf '%s' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::tag ${GITHUB_REF_NAME} is not a semver version"
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      # An unsigned tag is an unauthenticated instruction to publish. GitHub's own verification
+      # status is used rather than importing keys here, so the check reflects the same trust GitHub
+      # shows in the UI.
+      - name: Tag is annotated and signed by a verified key
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          version="${{ steps.version.outputs.version }}"
-          npm_version="$(node -p "require('./js/package.json').version")"
+          object_type="$(git cat-file -t "${GITHUB_REF_NAME}")"
+
+          if [ "${object_type}" != 'tag' ]; then
+            echo "::error::${GITHUB_REF_NAME} is a lightweight tag; release tags must be annotated and signed"
+            exit 1
+          fi
+
+          tag_sha="$(git rev-parse "${GITHUB_REF_NAME}")"
+          verified="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.verified')"
+          reason="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.reason')"
+
+          if [ "${verified}" != 'true' ]; then
+            echo "::error::tag signature is not verified (${reason})"
+            exit 1
+          fi
+
+          echo "Tag signature verified (${reason})"
+
+      - name: Tag is reachable from the default branch
+        run: |
+          git fetch --no-tags origin "+refs/heads/${GITHUB_BASE_REF:-main}:refs/remotes/origin/main" 2>/dev/null || \
+            git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "::error::${GITHUB_REF_NAME} does not point at a commit on main"
+            exit 1
+          fi
+
+      # A tag that disagrees with the manifests would publish versions nobody can correlate across
+      # the three ecosystems, which defeats the shared version line.
+      - name: Manifests agree with the tag
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          status=0
+
+          npm_version="$(python3 -c "import json;print(json.load(open('js/package.json'))['version'])")"
           py_version="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
           init_version="$(grep -m1 '^__version__' src/matchory_coding_style/__init__.py | cut -d'"' -f2)"
 
-          status=0
           for pair in "js/package.json:${npm_version}" "pyproject.toml:${py_version}" "__init__.py:${init_version}"; do
-            name="${pair%%:*}"
-            found="${pair##*:}"
-            if [ "${found}" != "${version}" ]; then
-              echo "::error::${name} declares ${found}, tag says ${version}"
+            if [ "${pair##*:}" != "${version}" ]; then
+              echo "::error::${pair%%:*} declares ${pair##*:}, tag says ${version}"
               status=1
             fi
           done
+
           exit "${status}"
 
-  npm:
-    name: Publish to GitHub Packages
+      - name: The changelog mentions this version
+        run: |
+          if ! grep -qF "[${{ steps.version.outputs.version }}]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+
+      # Publishing a commit whose CI never passed is how a broken or malicious change reaches a
+      # registry unnoticed.
+      - name: CI succeeded for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&status=completed" \
+            --jq '[.workflow_runs[] | select(.name == "CI")] | first | .conclusion // "missing"')"
+
+          if [ "${conclusion}" != 'success' ]; then
+            echo "::error::CI for ${GITHUB_SHA} is '${conclusion}', expected success"
+            exit 1
+          fi
+
+  build-npm:
+    name: Build the npm tarball
     needs: verify
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: js
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10.33.0
+          run_install: false
 
-      - uses: actions/setup-node@v6
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-          registry-url: https://npm.pkg.github.com
-          scope: '@matchory'
 
+      # --ignore-scripts stops any dependency's lifecycle hook from executing on the machine that
+      # builds a published artefact. Nothing in this package's dev tree needs one.
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        working-directory: js
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
-      # The published tarball must carry the committed generated files, not stale ones.
-      - name: Generated files are current
+      - name: Committed artefacts are current
+        working-directory: js
         run: node scripts/generate.mjs --check
 
       - name: Pack
-        run: npm pack --dry-run
+        id: pack
+        working-directory: js
+        run: |
+          tarball="$(npm pack --silent)"
+          echo "tarball=${tarball}" >> "$GITHUB_OUTPUT"
+          sha256sum "${tarball}" | tee "${tarball}.sha256"
 
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: js/${{ steps.pack.outputs.tarball }}
+
+      - name: Upload
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: npm-tarball
+          path: |
+            js/${{ steps.pack.outputs.tarball }}
+            js/${{ steps.pack.outputs.tarball }}.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  build-python:
+    name: Build the Python distributions
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+
+      - name: Build sdist and wheel
+        run: |
+          uv build --out-dir dist
+          ls -l dist
+          sha256sum dist/* | tee dist/SHA256SUMS
+
+      # The wheel and the sdist must contain the same presets that ship in the other two packages.
+      - name: The built wheel carries the presets
+        run: |
+          python3 - <<'PY'
+          import pathlib, zipfile, sys
+
+          wheels = list(pathlib.Path('dist').glob('*.whl'))
+          assert len(wheels) == 1, wheels
+          names = set(zipfile.ZipFile(wheels[0]).namelist())
+
+          required = {
+              'matchory_coding_style/ruff/base.toml',
+              'matchory_coding_style/ruff/strict.toml',
+              'matchory_coding_style/data/editorconfig',
+              'matchory_coding_style/cli.py',
+          }
+          missing = sorted(required - names)
+
+          if missing:
+              print(f'::error::wheel is missing: {", ".join(missing)}')
+              sys.exit(1)
+
+          print('wheel carries every preset')
+          PY
+
+      # Install the artefact that is about to be published and drive it, rather than trusting that
+      # source-tree tests imply a working wheel. Packaging mistakes only show up here.
+      - name: The built wheel works when installed
+        run: |
+          probe="$(mktemp -d)"
+          wheel="$(echo dist/*.whl)"
+
+          uvx --from "./${wheel}" matchory-coding-style sync --preset strict --project-root "${probe}"
+
+          printf '[project]\nname = "probe"\nversion = "0.1.0"\n\n[tool.ruff]\nextend = ".matchory/ruff.toml"\n' \
+            > "${probe}/pyproject.toml"
+
+          cd "${probe}"
+          uvx --from "${GITHUB_WORKSPACE}/${wheel}" matchory-coding-style verify --strict
+
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: 'dist/*.whl, dist/*.tar.gz'
+
+      - name: Upload
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: python-dists
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-npm:
+    name: Publish to npmjs
+    needs: [verify, build-npm]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      # id-token is what makes trusted publishing and provenance work. contents stays read; this job
+      # writes nothing to the repository.
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Pin npm
+        run: npm install -g "npm@${NPM_VERSION}"
+
+      - name: Download the attested tarball
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: npm-tarball
+          path: dist
+
+      - name: Checksum matches what was attested
+        run: |
+          cd dist
+          sha256sum --check ./*.sha256
+
+      # No NODE_AUTH_TOKEN: authentication is the OIDC token minted for the `release` environment,
+      # which npmjs is configured to accept for this package and nothing else.
       - name: Publish
-        if: github.event_name == 'push' || inputs.dry-run == false
-        run: npm publish --provenance --access restricted
+        run: |
+          npm publish ./dist/*.tgz \
+            --provenance \
+            --access public \
+            --tag latest
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [verify, build-python]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download the attested distributions
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: python-dists
+          path: dist
+
+      - name: Checksum matches what was attested
+        run: |
+          cd dist
+          sha256sum --check SHA256SUMS
+          rm SHA256SUMS
+
+      # No password or token: trusted publishing via OIDC. `attestations: true` makes the action
+      # generate and upload PEP 740 digital attestations alongside the distributions.
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          attestations: true
+          print-hash: true
+
+  github-release:
+    name: Publish the GitHub release
+    needs: [verify, publish-npm, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Download artefacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          path: artefacts
+          merge-multiple: true
+
+      - name: Create the release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          {
+            printf 'Published from a signed tag with build provenance.\n\n'
+            printf '| Package | Registry |\n|---|---|\n'
+            printf '| `matchory/coding-style` | [Packagist](https://packagist.org/packages/matchory/coding-style) |\n'
+            printf '| `@matchory/coding-style` | [npm](https://www.npmjs.com/package/@matchory/coding-style/v/%s) |\n' "${VERSION}"
+            printf '| `matchory-coding-style` | [PyPI](https://pypi.org/project/matchory-coding-style/%s/) |\n\n' "${VERSION}"
+            printf 'Verify the artefacts:\n\n```bash\ngh attestation verify <file> --repo %s\n```\n\n' "${GITHUB_REPOSITORY}"
+            printf -- '---\n\n'
+            sed -n "/^## \[${VERSION}\]/,/^## \[/p" CHANGELOG.md | sed '$d'
+          } > notes.md
+
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file notes.md \
+            --verify-tag \
+            artefacts/*
