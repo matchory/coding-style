@@ -6,19 +6,29 @@ export type VueOptions = {
      * omitted they are skipped entirely.
      */
     tailwindEntryPoint?: string | null;
-    /** Whether to report Tailwind classes that resolve to nothing. Defaults to `false`. */
+    /**
+     * Whether to report Tailwind classes that resolve to nothing. Defaults to `false`.
+     */
     unknownTailwindClasses?: boolean;
-    /** Whether to apply the Pinia rules. Defaults to `true`. */
+    /**
+     * Whether to apply the Pinia rules. Defaults to `true`.
+     */
     pinia?: boolean;
 };
 
-/** The Vue overlay on its own, without the core base or `eslint-config-prettier`. */
+/**
+ * The Vue overlay on its own, without the core base or `eslint-config-prettier`.
+ */
 export declare function vueConfigs(options?: VueOptions): FlatConfig[];
 
-/** The full rule set: the core base plus the Vue overlay. */
+/**
+ * The full rule set: the core base plus the Vue overlay.
+ */
 export declare function vue(options?: VueOptions): FlatConfig[];
 
-/** Compose the full Vue-inclusive base with a package's own file-scoped overrides. */
+/**
+ * Compose the full Vue-inclusive base with a package's own file-scoped overrides.
+ */
 export declare function withVue(options?: VueOptions, overrides?: FlatConfig[]): FlatConfig[];
 
 export default vue;

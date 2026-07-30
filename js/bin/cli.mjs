@@ -15,17 +15,19 @@
  * ESLint, oxlint and oxfmt configs written in JavaScript or TypeScript import this package directly
  * and need nothing from this command. Two things cannot:
  *
- *   - `.editorconfig`, which EditorConfig only ever resolves by walking up the directory tree.
- *   - `.oxlintrc.json` / `.oxfmtrc.json`, for repositories that configure those tools in JSON.
+ * - `.editorconfig`, which EditorConfig only ever resolves by walking up the directory tree.
+ * - `.oxlintrc.json` / `.oxfmtrc.json`, for repositories that configure those tools in JSON.
  *
  * Usage:
  *
- *     npx matchory-coding-style sync [--vue] [--rc] [--check]
+ * ```
+ * npx matchory-coding-style sync [--vue] [--rc] [--check]
  *
- *     --vue    Write the Vue variant of .oxlintrc.json.
- *     --rc     Also write .oxlintrc.json and .oxfmtrc.json. Omit in repositories that configure
- *              oxlint and oxfmt in TypeScript, which should import the presets instead.
- *     --check  Exit non-zero if a file is missing or out of date, without writing. Use in CI.
+ * --vue    Write the Vue variant of .oxlintrc.json.
+ * --rc     Also write .oxlintrc.json and .oxfmtrc.json. Omit in repositories that configure
+ *          oxlint and oxfmt in TypeScript, which should import the presets instead.
+ * --check  Exit non-zero if a file is missing or out of date, without writing. Use in CI.
+ * ```
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -62,7 +64,9 @@ if (command !== 'sync') {
     process.exit(1);
 }
 
-/** @type {Array<[string, string]>} Target filename in the project, source filename in the package. */
+/**
+ * @type {[string, string][]} Target filename in the project, source filename in the package.
+ */
 const managed = [['.editorconfig', '.editorconfig']];
 
 if (includeRcFiles) {
@@ -94,8 +98,6 @@ for (const [target, source] of managed) {
 }
 
 if (stale.length > 0) {
-    console.error(
-        `Out of date: ${stale.join(', ')}\nRun \`npx matchory-coding-style sync\``,
-    );
+    console.error(`Out of date: ${stale.join(', ')}\nRun \`npx matchory-coding-style sync\``);
     process.exit(1);
 }

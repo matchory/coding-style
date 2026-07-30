@@ -187,15 +187,23 @@ jobs:
             console.log("presets compose");
           '
 
+      # A probe needs real inputs: tsc fails with TS18003 on an empty program even for --showConfig,
+      # which would mask a genuinely broken `extends` chain.
       - name: tsconfig presets resolve
         run: |
           for preset in src/tsconfig/*.json; do
             echo "::group::${preset}"
-            echo '{"extends":"./'"${preset}"'","include":[]}' > "tsconfig.probe.json"
+            echo '{"extends":"./'"${preset}"'","include":["src/**/*.d.ts"]}' > "tsconfig.probe.json"
             pnpm exec tsc --showConfig --project tsconfig.probe.json > /dev/null
             rm tsconfig.probe.json
             echo "::endgroup::"
           done
+
+      - name: This package satisfies its own presets
+        run: |
+          pnpm exec oxfmt --check src bin scripts ./*.ts
+          pnpm exec oxlint src bin scripts
+          pnpm exec tsc --noEmit
 
   python:
     name: Python presets
@@ -205,8 +213,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
+      # A virtualenv rather than --system: the runner's interpreter is externally managed (PEP 668),
+      # so a system install is refused outright.
       - name: Build and install the package
-        run: uv pip install --system .
+        run: |
+          uv venv
+          uv pip install .
+          echo "${PWD}/.venv/bin" >> "${GITHUB_PATH}"
 
       # The presets chain by relative path (selector -> strict -> base), which only holds if `sync`
       # copies all of them. Running real ruff over a probe file is the only way to prove it.

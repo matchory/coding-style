@@ -18,6 +18,7 @@ import eslintParserVue from 'vue-eslint-parser';
 
 /**
  * @typedef {object} VueOptions
+ *
  * @property {string | null} [tailwindEntryPoint] Absolute path to the stylesheet that imports
  *   Tailwind. Required for the Tailwind rules; when omitted they are skipped entirely, because
  *   `eslint-plugin-better-tailwindcss` cannot resolve the theme without it and would report every
@@ -31,17 +32,25 @@ import eslintParserVue from 'vue-eslint-parser';
 /**
  * Vue template layout rules (`html-indent`, `first-attribute-linebreak`,
  * `html-closing-bracket-newline`, `max-attributes-per-line`, `html-comment-*`,
- * `padding-line-between-blocks`, …) are intentionally NOT configured: oxfmt owns Vue SFC formatting,
- * and `eslint-config-prettier` disables the rest that ship enabled in `vue/flat/recommended`.
+ * `padding-line-between-blocks`, …) are intentionally NOT configured: oxfmt owns Vue SFC
+ * formatting, and `eslint-config-prettier` disables the rest that ship enabled in
+ * `vue/flat/recommended`.
  *
  * @param {VueOptions} options
+ *
  * @returns {unknown[]}
  */
 export function vueConfigs(options = {}) {
-    const { tailwindEntryPoint = null, unknownTailwindClasses = false, pinia: withPinia = true } =
-        options;
+    const {
+        tailwindEntryPoint = null,
+        unknownTailwindClasses = false,
+        pinia: withPinia = true,
+    } = options;
 
-    const configs = [...vuePlugin.configs['flat/recommended'], ...vueAccessibility.configs['flat/recommended']];
+    const configs = [
+        ...vuePlugin.configs['flat/recommended'],
+        ...vueAccessibility.configs['flat/recommended'],
+    ];
 
     if (withPinia) {
         configs.push({
@@ -131,10 +140,7 @@ export function vueConfigs(options = {}) {
                 },
             ],
             'vue/define-props-declaration': ['error', 'type-based'],
-            'vue/html-button-has-type': [
-                'error',
-                { button: true, reset: true, submit: true },
-            ],
+            'vue/html-button-has-type': ['error', { button: true, reset: true, submit: true }],
             'vue/match-component-import-name': ['error'],
 
             // Superseded by the oxlint base, which reports these as warnings during development.
@@ -230,6 +236,7 @@ export function vueConfigs(options = {}) {
  * The full rule set: the core base plus the Vue overlay.
  *
  * @param {VueOptions} options
+ *
  * @returns {unknown[]}
  */
 export function vue(options = {}) {
@@ -241,6 +248,7 @@ export function vue(options = {}) {
  *
  * @param {VueOptions} options
  * @param {unknown[]} overrides
+ *
  * @returns {unknown[]}
  */
 export function withVue(options = {}, overrides = []) {

@@ -11,8 +11,9 @@
  * Canonical oxfmt configuration for every Matchory JavaScript and TypeScript project.
  *
  * Four-space indentation and single quotes are the organisation-wide choice. Repositories formatted
- * the other way round need a one-time reformat commit when adopting this; there is no per-repository
- * variant, because two formatting standards is the problem this package exists to remove.
+ * the other way round need a one-time reformat commit when adopting this; there is no
+ * per-repository variant, because two formatting standards is the problem this package exists to
+ * remove.
  *
  * Returned as a plain object rather than through oxfmt's `defineConfig()` so that the generator
  * emitting `.oxfmtrc.json` can import it without oxfmt installed. Consuming configs are free to

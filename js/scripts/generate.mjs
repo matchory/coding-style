@@ -13,17 +13,19 @@
  * Emits the JSON artefacts that repositories using oxlint's and oxfmt's rc-file format consume.
  *
  * Not every repository configures these tools in TypeScript. `matchory/ui`, for example, carries
- * `.oxlintrc.json` and `.oxfmtrc.json`, which cannot spread a JavaScript object. Rather than forcing
- * a config-format migration as the price of adopting the shared style, the same source objects are
- * serialised here and copied in by `matchory-coding-style sync`.
+ * `.oxlintrc.json` and `.oxfmtrc.json`, which cannot spread a JavaScript object. Rather than
+ * forcing a config-format migration as the price of adopting the shared style, the same source
+ * objects are serialised here and copied in by `matchory-coding-style sync`.
  *
  * The output is committed so that `sync` is a plain file copy with no dependency on this package's
  * own toolchain, and CI runs `--check` to prove the committed files still match the source.
  *
  * Usage:
  *
- *     node scripts/generate.mjs
- *     node scripts/generate.mjs --check
+ * ```
+ * node scripts/generate.mjs
+ * node scripts/generate.mjs --check
+ * ```
  */
 
 import { oxfmtBase } from '../src/oxfmt/base.js';
@@ -46,6 +48,7 @@ const check = process.argv.includes('--check');
  *
  * @param {string} schema
  * @param {object} config
+ *
  * @returns {string}
  */
 function render(schema, config) {

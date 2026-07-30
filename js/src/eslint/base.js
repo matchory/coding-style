@@ -97,6 +97,7 @@ export const core = [...coreConfigs, prettier];
  * Use in TypeScript-only packages to skip the Vue rule surface entirely.
  *
  * @param {unknown[]} overrides
+ *
  * @returns {unknown[]}
  */
 export function withCore(overrides = []) {

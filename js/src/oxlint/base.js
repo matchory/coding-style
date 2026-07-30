@@ -10,8 +10,8 @@
 /**
  * Shared oxlint configuration for JavaScript and TypeScript.
  *
- * Each repository ships a thin `oxlint.config.ts` that imports this object, spreads it, and adds its
- * own ignore patterns. oxlint auto-discovers the nearest config per file.
+ * Each repository ships a thin `oxlint.config.ts` that imports this object, spreads it, and adds
+ * its own ignore patterns. oxlint auto-discovers the nearest config per file.
  *
  * This object is also consumed by the shared ESLint base via `eslint-plugin-oxlint`'s
  * `buildFromOxlintConfig(...)`, which reads `rules`, `categories` and `overrides` to switch off the
