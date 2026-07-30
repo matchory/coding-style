@@ -52,7 +52,7 @@ or by repository configuration, not by convention.
 
 | Control | What it prevents |
 |---|---|
-| **No long-lived registry credentials.** npm and PyPI authenticate via OIDC trusted publishing. The single exception is npm's first publish, which is bootstrapped with a 7-day scoped token and then locked out by the workflow. | There is no standing token in this repository, its secrets, or a maintainer's keychain to steal. |
+| **No registry credentials at all.** npm and PyPI both authenticate via OIDC trusted publishing. npm's package-creation problem was solved with a deprecated placeholder rather than a CI token. | There is no token in this repository or its secrets to steal, at any point in its history. |
 | **`release` environment, restricted to `v*` tags.** | A workflow run from a branch or pull request cannot obtain an OIDC token whose environment claim the registries accept. |
 | **`release` environment requires a human approval.** | An automated or accidental tag push cannot publish unattended. |
 | **Signed, annotated tags only.** The workflow rejects a lightweight tag and asks GitHub whether the signature verifies. | An attacker with push access but no signing key cannot trigger a release. |
@@ -99,12 +99,11 @@ Stated explicitly rather than left for someone to discover:
 
 - **Composer has no artefact provenance.** See above. The mitigation is repository protection plus
   signed tags.
-- **npm's first publish authenticated with a token**, because npm cannot attach a trusted publisher to a
-  package that does not yet exist and offers no way to reserve a name. The token was scoped to the
-  `@matchory` scope, expired within 7 days, lived only as a `release` environment secret, and the
-  workflow now refuses the token path entirely — a release fails while the secret is present. The
-  artefact itself is unaffected: `--provenance` comes from the job's Sigstore identity, not from the
-  authentication method, so `v0.1.0` is attested like every version after it.
+- **`@matchory/coding-style@0.0.0` was published from a maintainer machine and has no provenance.** npm
+  cannot configure a trusted publisher for a package that does not exist, so something had to be
+  published first. The placeholder contains only a README and the licence, is deprecated, and is not
+  under the `latest` dist-tag. Every version anyone would actually install is published through OIDC
+  with provenance. No npm token has ever been stored in this repository.
 - **A single maintainer can both author and approve a release.** `prevent_self_review` is off on the
   `release` environment because the team is small enough that enabling it would block releases
   entirely. Adding a second reviewer is the fix, and is a people problem rather than a configuration
@@ -147,58 +146,62 @@ PyPI supports *pending* publishers, so this works before the project exists:
 
 ### npm
 
-npm cannot attach a trusted publisher to a package that does not exist, and there is no way to reserve
-a name first. The first publish therefore has to authenticate with a token. This is a bootstrap, and
-the workflow makes it single-use by construction.
+npm cannot configure a trusted publisher for a package that does not exist, and offers no way to
+reserve a name — there is no equivalent of PyPI's pending publishers. The package therefore has to
+exist before OIDC can be used at all.
 
-**Provenance is not affected.** `npm publish --provenance` derives its attestation from the job's OIDC
-identity token via Sigstore, independently of how npm authenticates. So `v0.1.0` is fully attested even
-though it predates trusted publishing on the package.
+That gap is crossed with a **deprecated `0.0.0` placeholder**, published manually, so that no token
+ever enters this repository and the first version anyone installs (`0.1.0`) is published entirely
+through OIDC with provenance.
 
-#### Step 1 — mint a deliberately weak token
+#### Step 1 — publish the placeholder
 
-At https://www.npmjs.com/settings/matchory/tokens, create a **granular access token**:
-
-| Setting | Value |
-|---|---|
-| Type | Granular access token |
-| Expiration | The shortest offered (7 days) |
-| Packages and scopes | Read and write, limited to the `@matchory` scope |
-| Organisations | No access |
-
-Do not create a classic automation token: those are not scopable and do not expire.
-
-#### Step 2 — store it where the existing gates already apply
-
-Add it as a secret named `NPM_TOKEN` on the **`release` environment** — not as a repository secret.
-Environment secrets are only readable by a job running in that environment, which already requires a
-human approval and a `v*` tag:
+From a maintainer machine, `npm login` first: the `--registry` flag is required because an
+`@matchory:registry` entry in a developer `.npmrc` points the scope at GitHub Packages and beats
+`publishConfig.registry`.
 
 ```bash
-gh secret set NPM_TOKEN --env release --repo matchory/coding-style
+npm login --registry https://registry.npmjs.org
 ```
 
-#### Step 3 — release
+Then publish a package containing nothing but a README and the licence, under a dist-tag that is not
+`latest`:
 
-Push the signed tag. The workflow warns loudly that it is using the bootstrap path.
+```bash
+npm publish --registry https://registry.npmjs.org --access public --tag placeholder
+```
 
-#### Step 4 — close the door, immediately
+#### Step 2 — configure the trusted publisher
 
-1. On the package settings page, add the **trusted publisher**:
-   - Organisation/repository: `matchory/coding-style`
-   - Workflow: `release.yml`
-   - Environment: `release`
-2. Set **Publishing access** to *Require trusted publishing*, which disallows token-based publishing
-   outright.
-3. Enable **Require two-factor authentication** for the package.
-4. Delete the secret and revoke the token:
-   ```bash
-   gh secret delete NPM_TOKEN --env release --repo matchory/coding-style
-   ```
+At `https://www.npmjs.com/package/@matchory/coding-style/access` — not the account-level packages page:
 
-Step 4 is not optional housekeeping. The workflow refuses to run the token path once the package
-exists on npmjs, so **the next release fails until the secret is gone.** That is intentional: it turns
-"remember to clean up" into something the pipeline enforces.
+- Organisation/repository: `matchory/coding-style`
+- Workflow: `release.yml`
+- Environment: `release`
+
+Then set **Publishing access** to *Require trusted publishing*, which disallows token-based publishing
+outright, and enable **Require two-factor authentication** for the package.
+
+#### Step 3 — release normally
+
+Tag `v0.1.0`. The workflow sees that the package exists and that no `NPM_TOKEN` secret is set, so it
+authenticates via OIDC. `0.1.0` becomes `latest`.
+
+#### Step 4 — tidy up
+
+```bash
+npm deprecate @matchory/coding-style@0.0.0 "Placeholder with no contents; install 0.1.0 or later."
+npm dist-tag rm @matchory/coding-style placeholder
+```
+
+#### The token path exists but is a fallback
+
+`release.yml` still accepts an `NPM_TOKEN` secret on the `release` environment, for the case where a
+future package has to be bootstrapped the other way. It is self-limiting: the workflow **refuses to
+use a token once the package exists on npmjs**, so a bootstrap credential cannot quietly become
+permanent. If you ever use it, make it a granular token scoped to `@matchory` with the shortest
+available expiry, store it as an environment secret rather than a repository one, and delete it
+immediately afterwards — the next release fails until you do.
 
 ### Packagist
 
