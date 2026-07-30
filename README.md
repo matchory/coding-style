@@ -211,12 +211,20 @@ return Preset::laravel(RectorConfig::configure())
     ->withSets([\Pest\Rector\Set\PestSetList::CODING_STYLE]);
 ```
 
-### `.editorconfig`
+### `.editorconfig` and wiring checks
 
 ```bash
-vendor/bin/matchory-coding-style sync           # write it
-vendor/bin/matchory-coding-style sync --check   # CI
+vendor/bin/matchory-coding-style sync            # write .editorconfig
+vendor/bin/matchory-coding-style sync --check    # CI
+vendor/bin/matchory-coding-style verify          # is this project actually wired up?
+vendor/bin/matchory-coding-style verify --strict # treat warnings as failures
 ```
+
+`verify` exists because depending on the package is not the same as using it. It checks that a
+composer script passes a Pint preset via `--config`, that extension-installer really picked up
+`base.neon`, that `cognitive_complexity` is declared locally (the one parameter that cannot be
+shipped), and that `rector.php` calls a preset. Warnings cover things that legitimately vary per
+repository, like not using Rector at all.
 
 ---
 
@@ -297,6 +305,17 @@ npx matchory-coding-style sync --rc --vue --check   # CI
 
 Migrating to `oxlint.config.ts` is still better, and then `--rc` is unnecessary.
 
+### Wiring checks
+
+```bash
+npx matchory-coding-style verify           # is this project actually wired up?
+npx matchory-coding-style verify --strict  # treat warnings as failures
+```
+
+Checks that the oxfmt, oxlint and ESLint configs import the presets (or that the rc files match a
+synced preset), and that `tsconfig.json` extends one. A config file that exists but does not import
+the preset is reported as a failure, not a pass: that is the case a presence check would miss.
+
 ---
 
 ## Python
@@ -321,6 +340,15 @@ extend = ".matchory/ruff.toml"
 `sync` copies both presets plus a one-line selector, because `strict.toml` extends `base.toml` by
 relative path. Select the preset with `--preset`; `--check` verifies without writing.
 
+```bash
+matchory-coding-style verify           # is this project actually wired up?
+matchory-coding-style verify --strict  # treat warnings as failures
+```
+
+`verify` reads the selected preset back out of `.matchory/ruff.toml`, so a repository on `strict` is
+not told it has drifted from `base`. A `[tool.ruff]` section that inlines its own rules instead of
+extending the copy is a failure rather than a pass.
+
 Prefer wiring it through pre-commit, which pins the version and the ruff binary together:
 
 ```yaml
@@ -332,6 +360,40 @@ repos:
       - id: matchory-ruff
       - id: matchory-ruff-format
 ```
+
+---
+
+## Renovate
+
+This repository is also the org-wide Renovate config, extended by name the same way the style presets
+are. In a consuming repository's `renovate.json`:
+
+```json
+{
+  "extends": [
+    "github>matchory/coding-style",
+    "github>matchory/coding-style//renovate/php",
+    "github>matchory/coding-style//renovate/javascript"
+  ]
+}
+```
+
+| Preset                            | Contents                                                     |
+|-----------------------------------|--------------------------------------------------------------|
+| `default.json` (no path)          | Schedule, dependency dashboard, semantic commits, grouped dev tooling, and a no-automerge rule for linter majors. Includes the consumer preset below. |
+| `//renovate/coding-style-consumer` | Collapses this package's three artefacts into one PR.        |
+| `//renovate/php`                  | Laravel ecosystem grouping, held-back framework majors, static-analysis minors kept separate. |
+| `//renovate/javascript`           | Vue and Vite groupings, ESLint plugins separated, oxlint/oxfmt never automerged. |
+| `//renovate/python`               | ruff held back and never automerged, grouped scientific stack. |
+
+The consumer preset is the one that earns its keep. Because all three packages share a version tag, a
+polyglot repository would otherwise get three pull requests for one upstream commit.
+
+Requires Renovate 38 or newer, which is when `matchPackageNames` gained glob support.
+
+**Do not also enable Dependabot version updates.** Dependabot *security* updates are fine alongside
+this and complement it: they only fire on advisories. A `dependabot.yml` with a `schedule` block,
+though, means every bump arrives twice.
 
 ---
 

@@ -64,13 +64,93 @@ def _sources(preset: str) -> dict[str, str]:
     return sources
 
 
+def _verify(project_root: Path, *, strict: bool) -> int:
+    """Check that this project actually consumes the shared configuration.
+
+    Installing the package is not the same as using it: a repository can depend on it while its
+    ``pyproject.toml`` still carries an inlined rule set, or while ``.matchory/`` holds whatever
+    preset was current the day it was first written. Neither breaks a build on its own, and both are
+    how drift comes back.
+    """
+    findings: list[tuple[str, str, str]] = []
+
+    def record(level: str, subject: str, detail: str) -> None:
+        findings.append((level, subject, detail))
+        print(f"{level:<6} {subject:<14} {detail}")
+
+    # Reuse the sync sources so this cannot disagree with what sync would write. The preset is read
+    # back from the selector rather than assumed, so a repository on `strict` is not told it has
+    # drifted from `base`.
+    selector = project_root / ".matchory" / "ruff.toml"
+    preset = "base"
+
+    if selector.is_file():
+        for candidate in PRESETS:
+            if f'"ruff/{candidate}.toml"' in selector.read_text(encoding="utf-8"):
+                preset = candidate
+                break
+    else:
+        record("FAIL", "ruff", "no .matchory/ruff.toml; run `matchory-coding-style sync`")
+
+    stale = [
+        relative
+        for relative, expected in _sources(preset).items()
+        if not (project_root / relative).is_file()
+        or (project_root / relative).read_text(encoding="utf-8") != expected
+    ]
+
+    if selector.is_file():
+        if stale:
+            record(
+                "FAIL",
+                "ruff",
+                f"out of date: {', '.join(stale)}; run `matchory-coding-style sync "
+                f"--preset {preset}`",
+            )
+        else:
+            record("ok", "ruff", f"the copied '{preset}' preset is current")
+
+    pyproject = project_root / "pyproject.toml"
+
+    if not pyproject.is_file():
+        record("warn", "pyproject", "no pyproject.toml")
+    else:
+        contents = pyproject.read_text(encoding="utf-8")
+
+        if ".matchory/ruff.toml" in contents:
+            record("ok", "pyproject", "[tool.ruff] extends the copied preset")
+        elif "[tool.ruff]" in contents:
+            record(
+                "FAIL",
+                "pyproject",
+                '[tool.ruff] does not extend ".matchory/ruff.toml", so the shared rules are unused',
+            )
+        else:
+            record("FAIL", "pyproject", "no [tool.ruff] section")
+
+    failures = sum(1 for level, _, _ in findings if level == "FAIL")
+    warnings = sum(1 for level, _, _ in findings if level == "warn")
+    print(
+        f"\n{len(findings) - failures - warnings} ok, {warnings} warning(s), {failures} failure(s)"
+    )
+
+    if failures:
+        return 1
+
+    if strict and warnings:
+        print("Warnings are failures under --strict", file=sys.stderr)
+        return 1
+
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``matchory-coding-style`` console script."""
     parser = argparse.ArgumentParser(
         prog="matchory-coding-style",
-        description="Write the shared Matchory style configuration into this repository.",
+        description="Manage this repository's use of the shared Matchory style configuration.",
     )
-    parser.add_argument("command", choices=["sync"], nargs="?", default="sync")
+    parser.add_argument("command", choices=["sync", "verify"], nargs="?", default="sync")
     parser.add_argument(
         "--preset",
         choices=PRESETS,
@@ -81,15 +161,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit non-zero if a file is missing or out of date, without writing. Use in CI.",
+        help="sync only: exit non-zero if a file is missing or out of date, without writing.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="verify only: treat warnings as failures.",
     )
     parser.add_argument(
         "--project-root",
         type=Path,
         default=Path.cwd(),
-        help="Directory to write into. Defaults to the current working directory.",
+        help="Directory to act on. Defaults to the current working directory.",
     )
     arguments = parser.parse_args(argv)
+
+    if arguments.command == "verify":
+        return _verify(arguments.project_root, strict=arguments.strict)
 
     stale: list[str] = []
 

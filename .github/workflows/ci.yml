@@ -146,7 +146,117 @@ jobs:
           vendor/bin/matchory-coding-style sync
           diff -u "${GITHUB_WORKSPACE}/.editorconfig" .editorconfig
           vendor/bin/pint --config vendor/matchory/coding-style/php/pint/base.json --test src
+
+          # `verify` has to discriminate, not just exit 0. This probe has no pint script, no
+          # phpstan.neon and no rector.php, so it must fail; then wire it up and it must pass.
+          if vendor/bin/matchory-coding-style verify > /dev/null 2>&1; then
+            echo "::error::verify passed an unwired project"
+            status=1
+          fi
+
+          printf 'includes:\n    - vendor/matchory/coding-style/php/phpstan/complexity.neon\n\nparameters:\n    level: 5\n    paths:\n        - src\n    cognitive_complexity:\n        class: 50\n        function: 15\n' \
+            > phpstan.neon
+          printf '<?php\n\ndeclare(strict_types=1);\n\nuse Matchory\\CodingStyle\\Rector\\Preset;\nuse Rector\\Config\\RectorConfig;\n\nreturn Preset::library(RectorConfig::configure())->withPaths([__DIR__ . "/src"]);\n' \
+            > rector.php
+          python3 - <<'PY'
+          import json, pathlib
+          path = pathlib.Path("composer.json")
+          manifest = json.loads(path.read_text())
+          manifest["scripts"] = {
+              "fmt": "pint --config vendor/matchory/coding-style/php/pint/base.json --parallel"
+          }
+          path.write_text(json.dumps(manifest, indent=4) + "\n")
+          PY
+
+          vendor/bin/matchory-coding-style verify --strict
           exit "${status}"
+
+  laravel:
+    name: Laravel preset under real Larastan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      # laravel.neon is the one preset that cannot be exercised from this repository: its parameters
+      # are registered by Larastan, which needs a bootstrapped Laravel application. So build the
+      # smallest real one. A 7-line bootstrap/app.php is enough for Larastan to resolve
+      # Larastan\Larastan\LARAVEL_VERSION and analyse properly.
+      #
+      # This is a stopgap. Once the Laravel template repository exists it becomes the natural
+      # consumer to point this at, instead of a skeleton maintained here.
+      - name: Build a Laravel consumer
+        run: |
+          probe="$(mktemp -d)"
+          echo "PROBE=${probe}" >> "${GITHUB_ENV}"
+          mkdir -p "${probe}/app/Models" "${probe}/bootstrap/cache"
+
+          cat > "${probe}/composer.json" <<JSON
+          {
+              "name": "matchory/laravel-probe",
+              "require": { "laravel/framework": "^12.0" },
+              "require-dev": {
+                  "matchory/coding-style": "*",
+                  "larastan/larastan": "^3.0"
+              },
+              "repositories": [
+                  { "type": "path", "url": "${GITHUB_WORKSPACE}", "options": { "symlink": false } }
+              ],
+              "config": { "allow-plugins": { "phpstan/extension-installer": true } },
+              "minimum-stability": "dev",
+              "prefer-stable": true
+          }
+          JSON
+
+          printf '<?php\n\ndeclare(strict_types=1);\n\nuse Illuminate\\Foundation\\Application;\n\nreturn Application::configure(basePath: dirname(__DIR__))->create();\n' \
+            > "${probe}/bootstrap/app.php"
+
+          # Uses Eloquent's event plumbing without extending Model, which is what the preset's one
+          # ignore exists for. Index and search model variants look like this.
+          printf '<?php\n\ndeclare(strict_types=1);\n\nnamespace App\\Models;\n\nuse Illuminate\\Database\\Eloquent\\Concerns\\HasEvents;\n\nfinal class IndexedProbe\n{\n    use HasEvents;\n}\n' \
+            > "${probe}/app/Models/IndexedProbe.php"
+
+          printf 'includes:\n    - vendor/matchory/coding-style/php/phpstan/laravel.neon\n    - vendor/matchory/coding-style/php/phpstan/complexity.neon\n\nparameters:\n    level: 5\n    paths:\n        - app\n    cognitive_complexity:\n        class: 50\n        function: 15\n' \
+            > "${probe}/phpstan.neon"
+
+          printf 'includes:\n    - vendor/matchory/coding-style/php/phpstan/complexity.neon\n\nparameters:\n    level: 5\n    paths:\n        - app\n    cognitive_complexity:\n        class: 50\n        function: 15\n' \
+            > "${probe}/phpstan-without-laravel.neon"
+
+          cd "${probe}" && composer install --no-interaction --no-progress
+
+      - name: laravel.neon parameters reach the consumer
+        working-directory: ${{ env.PROBE }}
+        run: |
+          parameters="$(vendor/bin/phpstan dump-parameters)"
+          status=0
+
+          for expected in 'disableMigrationScan: true' 'disableSchemaScan: true'; do
+            if ! printf '%s\n' "${parameters}" | grep -qF "${expected}"; then
+              echo "::error::laravel.neon did not apply: ${expected}"
+              status=1
+            fi
+          done
+
+          exit "${status}"
+
+      # Asserting both directions. A preset whose ignores silently stopped matching would still
+      # analyse clean, so "0 errors" alone proves nothing.
+      - name: laravel.neon suppresses what it claims to
+        working-directory: ${{ env.PROBE }}
+        run: |
+          vendor/bin/phpstan analyse --no-progress
+
+          without="$(vendor/bin/phpstan analyse --no-progress --error-format=json \
+            -c phpstan-without-laravel.neon || true)"
+
+          if ! printf '%s\n' "${without}" | grep -q 'class.missingExtends'; then
+            echo "::error::the HasEvents ignore is not discriminating; without laravel.neon the error should appear"
+            exit 1
+          fi
 
   javascript:
     name: JavaScript presets
@@ -225,6 +335,39 @@ jobs:
           pnpm exec oxlint src bin scripts
           pnpm exec tsc --noEmit
 
+      # Both directions: an unwired project must fail, a wired one must pass. `verify` exists to
+      # catch a repository that depends on the package but still lints with its own rules, so a
+      # version that always passed would be worse than useless.
+      - name: verify discriminates
+        run: |
+          probe="$(mktemp -d)"
+          cd "${probe}"
+          status=0
+
+          if node "${GITHUB_WORKSPACE}/js/bin/cli.mjs" verify > /dev/null 2>&1; then
+            echo "::error::verify passed an unwired project"
+            status=1
+          fi
+
+          cp "${GITHUB_WORKSPACE}/.editorconfig" .
+          printf "import { oxfmtBase } from '@matchory/coding-style/oxfmt';\nexport default { ...oxfmtBase };\n" > oxfmt.config.ts
+          printf "import { oxlintVue } from '@matchory/coding-style/oxlint/vue';\nexport default { ...oxlintVue };\n" > oxlint.config.ts
+          printf "import { withVue } from '@matchory/coding-style/eslint/vue';\nexport default withVue();\n" > eslint.config.js
+          printf '{ "extends": "@matchory/coding-style/tsconfig/vue.json" }\n' > tsconfig.json
+
+          node "${GITHUB_WORKSPACE}/js/bin/cli.mjs" verify --strict
+
+          # A config that exists but ignores the preset is the subtle case: the file is there, so a
+          # presence check would pass it.
+          printf 'export default { rules: {} };\n' > oxlint.config.ts
+
+          if node "${GITHUB_WORKSPACE}/js/bin/cli.mjs" verify > /dev/null 2>&1; then
+            echo "::error::verify passed a config that does not import the preset"
+            status=1
+          fi
+
+          exit "${status}"
+
   python:
     name: Python presets
     runs-on: ubuntu-latest
@@ -283,6 +426,34 @@ jobs:
             matchory-coding-style sync --preset "${preset}" --project-root "${work}" --check
             echo "::endgroup::"
           done
+
+          exit "${status}"
+
+      - name: verify discriminates
+        run: |
+          probe="$(mktemp -d)"
+          cd "${probe}"
+          status=0
+
+          if matchory-coding-style verify > /dev/null 2>&1; then
+            echo "::error::verify passed an unwired project"
+            status=1
+          fi
+
+          matchory-coding-style sync --preset strict
+          printf '[project]\nname = "probe"\nversion = "0.1.0"\n\n[tool.ruff]\nextend = ".matchory/ruff.toml"\n' \
+            > pyproject.toml
+          matchory-coding-style verify --strict
+
+          # A [tool.ruff] section that inlines its own rules instead of extending the copy is the
+          # case that matters: the section exists, so a presence check would pass it.
+          printf '[project]\nname = "probe"\nversion = "0.1.0"\n\n[tool.ruff]\nline-length = 88\n' \
+            > pyproject.toml
+
+          if matchory-coding-style verify > /dev/null 2>&1; then
+            echo "::error::verify passed a project with inlined ruff rules"
+            status=1
+          fi
 
           exit "${status}"
 

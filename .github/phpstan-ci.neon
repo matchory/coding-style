@@ -18,3 +18,12 @@ parameters:
     level: 6
     paths:
         - ../php/src
+
+    # Declared here rather than inherited, because this is the one parameter a package cannot ship:
+    # PHPStan merges extension configs after every `includes:`, and
+    # `tomasvotruba/cognitive-complexity` sorts after `matchory/coding-style`, so its own far stricter
+    # defaults (class: 40, function: 9) would win. This is the same wiring
+    # `matchory-coding-style verify` requires of consumers, so it is dogfooded here.
+    cognitive_complexity:
+        class: 50
+        function: 15

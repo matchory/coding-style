@@ -12,102 +12,62 @@
 
 declare(strict_types=1);
 
-/**
- * Copies the configuration files that cannot be extended from a package into the current project.
- *
- * Pint (`--config`), PHPStan (`includes:`) and Rector (a PHP call) all read configuration straight
- * out of `vendor/`, so they need nothing from this command. `.editorconfig` is the exception:
- * EditorConfig resolves `root = false` by walking up the directory tree and has no way to reference
- * a file inside a package, so the canonical copy has to be written into the repository.
- *
- * Usage:
- *
- *     vendor/bin/matchory-coding-style sync
- *     vendor/bin/matchory-coding-style sync --check
- */
+use Matchory\CodingStyle\Console\Reporter;
+use Matchory\CodingStyle\Console\Runner;
 
+/**
+ * Thin dispatcher. The logic lives in `php/src/Console/` so that PHPStan analyses it.
+ */
 $packageRoot = dirname(__DIR__, 2);
+
+foreach ([$packageRoot . '/vendor/autoload.php', $packageRoot . '/../../autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+
+        break;
+    }
+}
+
 $projectRoot = getcwd();
 
 if ($projectRoot === false) {
-    fwrite(STDERR, "Cannot determine the current working directory\n");
+    fwrite(STDERR, 'Cannot determine the current working directory' . PHP_EOL);
 
     exit(1);
 }
 
 $arguments = array_slice($argv, 1);
-$command = $arguments[0] ?? 'sync';
-$check = in_array('--check', $arguments, true);
+$command = $arguments[0] ?? 'help';
 
-if ( ! in_array($command, ['sync', 'help', '--help', '-h'], true)) {
-    fwrite(STDERR, sprintf("Unknown command '%s'\n", $command));
+$usage = <<<'USAGE'
+    matchory-coding-style <command> [options]
 
-    exit(1);
-}
+      sync [--check]      Write the configuration files that cannot be read out of vendor/.
+                          Currently: .editorconfig
+                          --check   Exit non-zero if a file is out of date, without writing.
 
-if ($command !== 'sync') {
-    echo <<<'USAGE'
-        matchory-coding-style sync [--check]
+      verify [--strict]   Check that this project is actually wired to the shared configuration:
+                          the Pint preset, PHPStan auto-discovery, the complexity thresholds that
+                          cannot be shipped from a package, and the Rector preset.
+                          --strict  Treat warnings as failures.
 
-          Writes the configuration files that cannot be extended from a package into the current
-          project. Currently: .editorconfig
+    USAGE;
 
-          --check  Exit non-zero if a file is missing or out of date, without writing. Use in CI.
-
-        USAGE;
+if ($command === 'help' || $command === '--help' || $command === '-h') {
+    echo $usage . PHP_EOL;
 
     exit(0);
 }
 
-/**
- * Files copied verbatim from the package into the project root.
- *
- * @var array<string, string>
- */
-$managed = [
-    '.editorconfig' => $packageRoot . '/.editorconfig',
-];
-
-$stale = [];
-
-foreach ($managed as $target => $source) {
-    $expected = file_get_contents($source);
-
-    if ($expected === false) {
-        fwrite(STDERR, sprintf("Cannot read '%s' from the package\n", $target));
-
-        exit(1);
-    }
-
-    $targetPath = $projectRoot . '/' . $target;
-    $current = is_file($targetPath) ? file_get_contents($targetPath) : null;
-
-    if ($current === $expected) {
-        echo sprintf("unchanged  %s\n", $target);
-
-        continue;
-    }
-
-    if ($check) {
-        $stale[] = $target;
-
-        continue;
-    }
-
-    if (file_put_contents($targetPath, $expected) === false) {
-        fwrite(STDERR, sprintf("Cannot write '%s'\n", $target));
-
-        exit(1);
-    }
-
-    echo sprintf("%s  %s\n", $current === null ? 'created   ' : 'updated   ', $target);
-}
-
-if ($stale !== []) {
-    fwrite(STDERR, sprintf(
-        "Out of date: %s\nRun `vendor/bin/matchory-coding-style sync`\n",
-        implode(', ', $stale),
-    ));
+if ($command !== 'sync' && $command !== 'verify') {
+    fwrite(STDERR, sprintf('Unknown command %s' . PHP_EOL . PHP_EOL, var_export($command, true)));
+    fwrite(STDERR, $usage . PHP_EOL);
 
     exit(1);
 }
+
+$runner = new Runner($packageRoot, $projectRoot, new Reporter());
+
+exit($command === 'sync'
+    ? $runner->sync(in_array('--check', $arguments, true))
+    : $runner->verify(in_array('--strict', $arguments, true)));

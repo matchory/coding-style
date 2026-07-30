@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Renovate rules for Python repositories. Extend after the org-wide default:",
+    "  { \"extends\": [\"github>matchory/coding-style\", \"github>matchory/coding-style//renovate/python\"] }"
+  ],
+  "packageRules": [
+    {
+      "description": [
+        "ruff releases often, and a minor can both add rules and change formatting. Hold it and",
+        "never automerge: the diff lands across the whole repository."
+      ],
+      "matchPackageNames": ["ruff"],
+      "automerge": false,
+      "minimumReleaseAge": "7 days",
+      "addLabels": ["reformat-risk"]
+    },
+    {
+      "description": "Test tooling patches are safe to merge unattended.",
+      "matchPackageNames": ["pytest", "pytest-**", "hypothesis"],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "test tooling (patch)",
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": [
+        "Scientific and ML wheels are large, interdependent, and frequently ABI-coupled. Group the",
+        "non-majors so one PR proves the combination installs."
+      ],
+      "matchPackageNames": ["numpy", "pandas", "scipy", "scikit-learn", "pyarrow", "torch"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "scientific stack (non-major)"
+    }
+  ]
+}

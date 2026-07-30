@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Renovate rules for JavaScript and TypeScript repositories. Extend after the org-wide default:",
+    "  { \"extends\": [\"github>matchory/coding-style\", \"github>matchory/coding-style//renovate/javascript\"] }"
+  ],
+  "packageRules": [
+    {
+      "description": [
+        "Vue and its toolchain are version-locked in practice: vue, vue-router, pinia and the Vite",
+        "plugin break in combination rather than individually."
+      ],
+      "matchPackageNames": ["vue", "vue-router", "pinia", "@vue/**", "@vitejs/plugin-vue"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "vue ecosystem (non-major)"
+    },
+    {
+      "description": "Vite and Vitest share a version line and must move together.",
+      "matchPackageNames": ["vite", "vitest", "@vitest/**", "vite-plugin-**"],
+      "groupName": "vite"
+    },
+    {
+      "description": [
+        "ESLint plugin minors add rules, which fails CI on unchanged code. That is expected and",
+        "wanted, but it should arrive as its own reviewable PR."
+      ],
+      "matchPackageNames": ["eslint-**", "@eslint/**", "typescript-eslint", "@typescript-eslint/**"],
+      "groupName": "eslint plugins",
+      "addLabels": ["reformat-risk"]
+    },
+    {
+      "description": [
+        "oxlint and oxfmt are pre-1.0 in spirit even past 1.0: minors change formatting output and",
+        "rule coverage. Never automerge, and let a release settle first."
+      ],
+      "matchPackageNames": ["oxlint", "oxfmt"],
+      "automerge": false,
+      "minimumReleaseAge": "7 days",
+      "addLabels": ["reformat-risk"]
+    },
+    {
+      "description": "Type definitions carry no runtime risk.",
+      "matchPackageNames": ["@types/**"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "type definitions",
+      "automerge": true,
+      "automergeType": "pr"
+    }
+  ]
+}

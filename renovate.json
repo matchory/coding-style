@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "This repository consumes its own presets. The php and javascript ecosystem presets both apply:",
+    "the PHP package and the npm package live in the same repository."
+  ],
+  "extends": [
+    "local>matchory/coding-style",
+    "local>matchory/coding-style//renovate/php",
+    "local>matchory/coding-style//renovate/javascript",
+    "local>matchory/coding-style//renovate/python"
+  ]
+}

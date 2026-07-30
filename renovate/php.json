@@ -1,0 +1,47 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Renovate rules for PHP repositories. Extend after the org-wide default:",
+    "  { \"extends\": [\"github>matchory/coding-style\", \"github>matchory/coding-style//renovate/php\"] }"
+  ],
+  "packageRules": [
+    {
+      "description": [
+        "Laravel and its first-party packages release together and are tested together, so bumping",
+        "one without the others produces avoidable conflicts."
+      ],
+      "matchPackageNames": ["laravel/**", "nunomaduro/**", "spatie/laravel-**"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "laravel ecosystem (non-major)"
+    },
+    {
+      "description": [
+        "A Laravel major is a coordinated upgrade, never a routine bump. Hold it back long enough",
+        "for the ecosystem to catch up, and keep it out of any group."
+      ],
+      "matchPackageNames": ["laravel/framework"],
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "30 days",
+      "addLabels": ["framework-upgrade"],
+      "automerge": false
+    },
+    {
+      "description": [
+        "Static analysis minors routinely surface new findings, which is a code change disguised as",
+        "a dependency bump. Keep them separate so the resulting diff is attributable."
+      ],
+      "matchPackageNames": ["phpstan/**", "larastan/**", "tomasvotruba/**"],
+      "matchUpdateTypes": ["minor"],
+      "groupName": "static analysis",
+      "addLabels": ["reformat-risk"]
+    },
+    {
+      "description": "Patch-level updates to test tooling are safe to merge unattended.",
+      "matchPackageNames": ["pestphp/**", "phpunit/**", "mockery/**"],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "test tooling (patch)",
+      "automerge": true,
+      "automergeType": "pr"
+    }
+  ]
+}

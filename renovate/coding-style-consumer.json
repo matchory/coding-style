@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Collapses this package's three ecosystem artefacts into a single pull request.",
+    "All three share one version tag, because Composer needs a semver-parseable tag at the",
+    "repository root and prefixed tags like `php/v1.2.0` are not an option. So a change touching only",
+    "the oxlint rules still bumps the version PHP and Python consumers see. Without this grouping a",
+    "polyglot repository gets three PRs for one upstream commit.",
+    "Included by the org-wide default preset; extend it directly only if you are not using that."
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "matchory/coding-style",
+        "@matchory/coding-style",
+        "matchory-coding-style"
+      ],
+      "groupName": "matchory coding style",
+      "groupSlug": "matchory-coding-style",
+      "separateMajorMinor": true,
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "style",
+      "addLabels": ["coding-style"],
+      "prBodyNotes": [
+        "A major bump may reformat files or surface new findings. Run the formatters and analysers before merging:",
+        "",
+        "- PHP: `composer run fmt` then `composer run analyze`",
+        "- JavaScript: `pnpm run fmt` then `pnpm run lint`",
+        "- Python: `matchory-coding-style sync` then `ruff check` and `ruff format`",
+        "",
+        "If the diff is only formatting, commit it separately from the version bump so review stays readable."
+      ]
+    },
+    {
+      "description": [
+        "The version line moves for reasons unrelated to your ecosystem, so a patch bump is often a",
+        "no-op for a given repository. Automerge those; anything else gets read by a human."
+      ],
+      "matchPackageNames": [
+        "matchory/coding-style",
+        "@matchory/coding-style",
+        "matchory-coding-style"
+      ],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "minimumReleaseAge": "1 day"
+    }
+  ]
+}
