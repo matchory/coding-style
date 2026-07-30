@@ -344,7 +344,7 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if npm view @matchory/coding-style version --registry https://registry.npmjs.org > /dev/null 2>&1; then
+          if npm view @matchory/coding-style version --@matchory:registry=https://registry.npmjs.org > /dev/null 2>&1; then
             exists=true
           else
             exists=false
@@ -366,18 +366,30 @@ jobs:
             echo 'Publishing via OIDC trusted publishing'
           fi
 
-      # `publishConfig.registry` in package.json does NOT win over an `@scope:registry` entry in an
-      # .npmrc, and npm's provenance code does not validate which registry it is publishing to. So a
-      # stray scope mapping — a developer's ~/.npmrc, a repository .npmrc added later, setup-node's
-      # registry wiring — could redirect a provenance-signed release to another registry entirely.
-      # Pinning --registry on the command line removes that vector, and this asserts it took effect.
-      - name: The resolved publish registry is npmjs
+      # For a SCOPED package npm resolves the registry from `@scope:registry`, and only falls back to
+      # the generic `registry` key. `--registry` sets the generic key, so it loses to any
+      # `@matchory:registry` entry — in a developer .npmrc, a repository .npmrc, or setup-node's
+      # config. This was verified the hard way: a publish with `--registry https://registry.npmjs.org`
+      # went to GitHub Packages instead, because a scope mapping outranked it.
+      #
+      # `--@matchory:registry=` sets the key that actually wins. npm's provenance code does not
+      # validate the destination registry at all, so without this a provenance-signed release could
+      # land somewhere unintended.
+      - name: Confirm the publish target is npmjs
         run: |
-          resolved="$(npm config get @matchory:registry)"
+          target="$(npm publish ./dist/*.tgz \
+            --dry-run \
+            --@matchory:registry=https://registry.npmjs.org \
+            --access public \
+            --tag '${{ needs.verify.outputs.dist_tag }}' 2>&1 \
+            | grep -oE 'Publishing to [^ ]+' | head -1)"
 
-          if [ "${resolved}" != 'undefined' ] && [ "${resolved#https://registry.npmjs.org}" = "${resolved}" ]; then
-            echo "::warning::@matchory:registry resolves to ${resolved}; --registry overrides it for this publish"
-          fi
+          echo "${target:-<no target reported>}"
+
+          case "${target}" in
+            *'https://registry.npmjs.org'*) echo 'Target confirmed: npmjs' ;;
+            *) echo "::error::resolved publish target is not npmjs (${target:-unknown}); refusing to publish"; exit 1 ;;
+          esac
 
       - name: Publish
         env:
@@ -389,7 +401,7 @@ jobs:
           fi
 
           npm publish ./dist/*.tgz \
-            --registry https://registry.npmjs.org \
+            --@matchory:registry=https://registry.npmjs.org \
             --provenance \
             --access public \
             --tag '${{ needs.verify.outputs.dist_tag }}'
