@@ -249,7 +249,13 @@ jobs:
         run: |
           uv build --out-dir dist
           ls -l dist
-          sha256sum dist/* | tee dist/SHA256SUMS
+
+          # Generated from INSIDE dist/ so the manifest holds bare filenames. The publish job verifies
+          # it after `cd dist`, so a `dist/`-prefixed path there resolves to `dist/dist/...` and fails
+          # to open — which is exactly how the first 0.1.1 attempt broke. Patterns are explicit rather
+          # than `*` so SHA256SUMS can never checksum itself.
+          ( cd dist && sha256sum -- *.whl *.tar.gz > SHA256SUMS )
+          cat dist/SHA256SUMS
 
       # The wheel and the sdist must contain the same presets that ship in the other two packages.
       - name: The built wheel carries the presets
@@ -463,9 +469,16 @@ jobs:
         run: |
           npm config set '//npm.pkg.github.com/:_authToken' "${GH_PACKAGES_TOKEN}"
 
-          # --provenance is deliberately omitted. GitHub Packages neither displays nor verifies npm
-          # provenance statements, and the same bytes already carry one on npmjs plus a GitHub artefact
-          # attestation. Generating a second statement here would add a claim nobody can check.
+          # --provenance is deliberately omitted, and this job is granted no `id-token` permission.
+          # GitHub Packages neither displays nor verifies npm provenance statements, and the same bytes
+          # already carry one on npmjs plus a GitHub artefact attestation, so a second statement here
+          # would be a claim nobody can check.
+          #
+          # Note that omitting the flag is not sufficient on its own: `publishConfig.provenance: true`
+          # in package.json is baked into the tarball and makes npm attempt provenance on EVERY
+          # publish of it, which failed this job with "requires write access to the id-token
+          # permission". The declaration was removed from package.json; the npmjs job passes
+          # --provenance explicitly instead, so intent is per-registry rather than per-tarball.
           npm publish ./dist/*.tgz \
             --@matchory:registry=https://npm.pkg.github.com \
             --tag '${{ needs.verify.outputs.dist_tag }}'

@@ -493,5 +493,28 @@ jobs:
 
           exit "${status}"
 
+      # The release builds a checksum manifest and verifies it from inside dist/. A path-prefix mistake
+      # there is invisible until a tag is already cut and immutable, so the round trip is exercised
+      # here instead of being discovered during a release.
+      - name: Checksum manifest round-trips the way the release verifies it
+        run: |
+          work="$(mktemp -d)"
+          cp -r pyproject.toml src README.md LICENSE "${work}/"
+          cd "${work}"
+
+          uv build --out-dir dist
+          ( cd dist && sha256sum -- *.whl *.tar.gz > SHA256SUMS )
+          ( cd dist && sha256sum --check SHA256SUMS )
+
+          # And it must still fail on tampering, or it is decoration.
+          printf 'tampered' >> dist/*.whl
+
+          if ( cd dist && sha256sum --check --status SHA256SUMS ); then
+            echo '::error::the checksum manifest did not detect a modified artefact'
+            exit 1
+          fi
+
+          echo 'Checksum manifest round-trips and detects tampering'
+
       - name: This repository satisfies its own strict preset
         run: ruff check --no-cache src/ && ruff format --no-cache --check src/

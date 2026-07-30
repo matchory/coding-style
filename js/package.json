@@ -1,6 +1,6 @@
 {
   "name": "@matchory/coding-style",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared code style configuration for Matchory projects: oxlint, oxfmt, ESLint and TypeScript presets.",
   "license": "MIT",
   "private": false,
@@ -12,7 +12,6 @@
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true,
     "registry": "https://registry.npmjs.org"
   },
   "exports": {
