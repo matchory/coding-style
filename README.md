@@ -375,10 +375,20 @@ repos:
 
 ---
 
-## Renovate
+## Dependency updates
 
-This repository is also the org-wide Renovate config, extended by name the same way the style presets
-are. In a consuming repository's `renovate.json`:
+This repository's own updates are handled by **Dependabot** (`.github/dependabot.yml`): grouped per
+ecosystem, with a five-day cooldown on every one. The cooldown is a supply-chain control rather than a
+convenience — see `SECURITY.md`.
+
+Note that Renovate is **not installed** on the organisation. Dependabot is what actually runs. The
+presets below are for consumers that adopt Renovate, and express the same policy.
+
+## Renovate presets (optional)
+
+This repository also ships an org-wide Renovate config, extended by name the same way the style presets
+are. Using it requires installing the Renovate GitHub App. In a consuming repository's
+`renovate.json`:
 
 ```json
 {
@@ -403,9 +413,9 @@ polyglot repository would otherwise get three pull requests for one upstream com
 
 Requires Renovate 38 or newer, which is when `matchPackageNames` gained glob support.
 
-**Do not also enable Dependabot version updates.** Dependabot *security* updates are fine alongside
-this and complement it: they only fire on advisories. A `dependabot.yml` with a `schedule` block,
-though, means every bump arrives twice.
+**Pick one tool per repository.** Dependabot *security* updates compose fine with Renovate, because
+they only fire on advisories. Dependabot *version* updates do not: every bump would arrive twice. Our
+repositories use Dependabot, so these presets are only relevant if that changes.
 
 ---
 
