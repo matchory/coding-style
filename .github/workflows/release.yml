@@ -42,6 +42,8 @@ jobs:
       actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
+      dist_tag: ${{ steps.version.outputs.dist_tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -50,7 +52,7 @@ jobs:
           persist-credentials: false
 
       - id: version
-        name: Resolve version from the tag
+        name: Resolve version and dist-tag from the tag
         run: |
           version="${GITHUB_REF_NAME#v}"
 
@@ -59,7 +61,25 @@ jobs:
             exit 1
           fi
 
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          # A prerelease must NOT become the default install for every consumer, which is what
+          # publishing it under the `latest` dist-tag would do. Derive the channel from the prerelease
+          # identifier: 1.0.0-rc.1 -> rc, 1.0.0-beta.2 -> beta, anything unrecognised -> next.
+          if printf '%s' "${version}" | grep -q -- '-'; then
+            channel="$(printf '%s' "${version#*-}" | cut -d. -f1 | tr -cd '[:alpha:]')"
+            [ -n "${channel}" ] || channel='next'
+            prerelease=true
+          else
+            channel='latest'
+            prerelease=false
+          fi
+
+          {
+            echo "version=${version}"
+            echo "dist_tag=${channel}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Releasing ${version} to dist-tag '${channel}' (prerelease: ${prerelease})"
 
       # An unsigned tag is an unauthenticated instruction to publish. GitHub's own verification
       # status is used rather than importing keys here, so the check reflects the same trust GitHub
@@ -288,11 +308,14 @@ jobs:
         with:
           persist-credentials: false
 
+      # npm's documented workflow uses setup-node's `registry-url`. It is omitted here because the
+      # publish command pins `--registry` explicitly, which is strictly stronger: it cannot be
+      # overridden by an ambient .npmrc, whereas `publishConfig.registry` and setup-node's config can
+      # both lose to an `@scope:registry` entry.
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
 
       - name: Pin npm
         run: npm install -g "npm@${NPM_VERSION}"
@@ -308,14 +331,71 @@ jobs:
           cd dist
           sha256sum --check ./*.sha256
 
-      # No NODE_AUTH_TOKEN: authentication is the OIDC token minted for the `release` environment,
-      # which npmjs is configured to accept for this package and nothing else.
-      - name: Publish
+      # npm will not let a trusted publisher be attached to a package that does not exist yet, so the
+      # very first publish has to authenticate with a token. That path is deliberately single-use:
+      # once the package exists, a token becomes a hard failure rather than a quiet fallback, which is
+      # what stops the bootstrap credential from silently becoming permanent.
+      #
+      # Provenance is unaffected either way. `--provenance` is generated from this job's OIDC identity
+      # token via Sigstore and is independent of how npm authenticates, so v0.1.0 is fully attested
+      # even though it predates trusted publishing.
+      - name: Decide the authentication path
+        id: auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          if npm view @matchory/coding-style version --registry https://registry.npmjs.org > /dev/null 2>&1; then
+            exists=true
+          else
+            exists=false
+          fi
+
+          if [ -n "${NPM_TOKEN}" ] && [ "${exists}" = 'true' ]; then
+            echo "::error::@matchory/coding-style already exists on npmjs, so trusted publishing can be configured. Delete the NPM_TOKEN secret from the 'release' environment and revoke the token; this workflow will then authenticate via OIDC."
+            exit 1
+          fi
+
+          if [ -n "${NPM_TOKEN}" ]; then
+            echo 'method=token' >> "$GITHUB_OUTPUT"
+            echo "::warning::Bootstrapping the first publish with a token because the package does not exist yet. Immediately afterwards: configure the trusted publisher on npmjs, set publishing access to 'Require trusted publishing', then delete the NPM_TOKEN secret and revoke the token. The next release will fail until you do."
+          elif [ "${exists}" = 'false' ]; then
+            echo "::error::@matchory/coding-style does not exist on npmjs and no NPM_TOKEN is set. npm cannot attach a trusted publisher to a non-existent package, so the first publish needs a short-lived granular token in the 'release' environment. See SECURITY.md."
+            exit 1
+          else
+            echo 'method=oidc' >> "$GITHUB_OUTPUT"
+            echo 'Publishing via OIDC trusted publishing'
+          fi
+
+      # `publishConfig.registry` in package.json does NOT win over an `@scope:registry` entry in an
+      # .npmrc, and npm's provenance code does not validate which registry it is publishing to. So a
+      # stray scope mapping — a developer's ~/.npmrc, a repository .npmrc added later, setup-node's
+      # registry wiring — could redirect a provenance-signed release to another registry entirely.
+      # Pinning --registry on the command line removes that vector, and this asserts it took effect.
+      - name: The resolved publish registry is npmjs
+        run: |
+          resolved="$(npm config get @matchory:registry)"
+
+          if [ "${resolved}" != 'undefined' ] && [ "${resolved#https://registry.npmjs.org}" = "${resolved}" ]; then
+            echo "::warning::@matchory:registry resolves to ${resolved}; --registry overrides it for this publish"
+          fi
+
+      - name: Publish
+        env:
+          # Empty on every release after the first, in which case npm authenticates via OIDC.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ '${{ steps.auth.outputs.method }}' = 'token' ]; then
+            npm config set '//registry.npmjs.org/:_authToken' "${NPM_TOKEN}"
+          fi
+
           npm publish ./dist/*.tgz \
+            --registry https://registry.npmjs.org \
             --provenance \
             --access public \
-            --tag latest
+            --tag '${{ needs.verify.outputs.dist_tag }}'
+
+          # Leave nothing behind on the runner even though it is ephemeral.
+          npm config delete '//registry.npmjs.org/:_authToken' || true
 
   publish-pypi:
     name: Publish to PyPI
@@ -380,8 +460,15 @@ jobs:
             sed -n "/^## \[${VERSION}\]/,/^## \[/p" CHANGELOG.md | sed '$d'
           } > notes.md
 
+          prerelease_flag=''
+          if [ '${{ needs.verify.outputs.prerelease }}' = 'true' ]; then
+            prerelease_flag='--prerelease'
+          fi
+
+          # shellcheck disable=SC2086
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --notes-file notes.md \
             --verify-tag \
+            ${prerelease_flag} \
             artefacts/*
