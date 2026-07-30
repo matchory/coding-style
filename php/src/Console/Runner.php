@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Matchory\CodingStyle\Console;
 
 use JsonException;
+use Matchory\CodingStyle\Rector\Preset;
 
 use function array_key_exists;
 use function file_get_contents;
@@ -34,7 +35,7 @@ use const JSON_THROW_ON_ERROR;
  * Lives in `src/` rather than inside the executable so that PHPStan analyses it. The binary is a
  * thin dispatcher.
  */
-final class Runner
+final readonly class Runner
 {
     /**
      * Files copied verbatim into the project root, as target path => path inside this package.
@@ -49,9 +50,9 @@ final class Runner
     ];
 
     public function __construct(
-        private readonly string $packageRoot,
-        private readonly string $projectRoot,
-        private readonly Reporter $reporter,
+        private string $packageRoot,
+        private string $projectRoot,
+        private Reporter $reporter,
     ) {}
 
     /**
@@ -246,7 +247,7 @@ final class Runner
 
         $contents = (string) file_get_contents($config);
 
-        if (str_contains($contents, 'Matchory\\CodingStyle\\Rector\\Preset')) {
+        if (str_contains($contents, Preset::class)) {
             $this->reporter->pass('rector', 'uses a shared preset');
 
             return;
