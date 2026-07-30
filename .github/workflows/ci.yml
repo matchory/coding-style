@@ -221,25 +221,50 @@ jobs:
           uv pip install .
           echo "${PWD}/.venv/bin" >> "${GITHUB_PATH}"
 
-      # The presets chain by relative path (selector -> strict -> base), which only holds if `sync`
-      # copies all of them. Running real ruff over a probe file is the only way to prove it.
+      # The presets chain by relative path (pyproject -> .matchory/ruff.toml -> ruff/strict.toml ->
+      # ruff/base.toml), which only holds if `sync` copies all of them. Asserting on which rules fire
+      # proves both that the chain resolved and that the two tiers are genuinely different — a
+      # silently empty config would exit 0 and look like success.
       - name: sync writes a config real ruff accepts
         run: |
+          status=0
+
           for preset in base strict; do
             echo "::group::${preset}"
             work="$(mktemp -d)"
             matchory-coding-style sync --preset "${preset}" --project-root "${work}"
+
             printf '[project]\nname = "probe"\nversion = "0.1.0"\n\n[tool.ruff]\nextend = ".matchory/ruff.toml"\n' \
               > "${work}/pyproject.toml"
-            printf 'import os\n\n\ndef probe(value):\n    return os.path.join("a", value)\n' \
+            printf 'import os\n\n\ndef probe(value):\n    print(value)\n    return os.path.join("a", value)\n' \
               > "${work}/probe.py"
-            (cd "${work}" && ruff check --no-cache --output-format concise . || true)
-            (cd "${work}" && ruff format --no-cache --check . || true)
-            # A config that failed to resolve exits 2; findings exit 1.
-            (cd "${work}" && ruff check --no-cache --quiet . ; test "$?" -ne 2)
+
+            findings="$(cd "${work}" && ruff check --no-cache --output-format concise . || true)"
+            printf '%s\n' "${findings}"
+
+            # PTH118 is selected by base, so it must fire for both presets.
+            if ! printf '%s\n' "${findings}" | grep -q 'PTH118'; then
+              echo "::error::${preset}: base rules did not apply, the extend chain is broken"
+              status=1
+            fi
+
+            # T201 (print found) is selected only by strict.
+            if printf '%s\n' "${findings}" | grep -q 'T201'; then
+              if [ "${preset}" = 'base' ]; then
+                echo "::error::base: strict-only rule T201 fired, the tiers have collapsed"
+                status=1
+              fi
+            elif [ "${preset}" = 'strict' ]; then
+              echo "::error::strict: T201 did not fire, strict.toml was not applied"
+              status=1
+            fi
+
+            (cd "${work}" && ruff format --no-cache --check .) || true
             matchory-coding-style sync --preset "${preset}" --project-root "${work}" --check
             echo "::endgroup::"
           done
+
+          exit "${status}"
 
       - name: This repository satisfies its own strict preset
         run: ruff check --no-cache src/ && ruff format --no-cache --check src/
