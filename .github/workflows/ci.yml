@@ -31,7 +31,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
           coverage: none
 
       - name: Install dependencies
@@ -82,6 +82,26 @@ jobs:
 
       - name: Rector library preset runs
         run: vendor/bin/rector process --dry-run --no-progress-bar --config=.github/rector-ci.php
+
+      # The pest() preset returns the config untouched when its provider is absent. That is correct
+      # behaviour, but it means a wrong probe class, a renamed rule, or another provider swap would
+      # silently disable every Pest rule while Rector still exits 0. Assert a rule actually fires.
+      - name: Pest rules actually fire
+        run: |
+          work="$(mktemp -d)"
+          mkdir -p "${work}/tests"
+          printf '<?php\n\ndeclare(strict_types=1);\n\nit("probes", function (): void {\n    expect(true)->toBe(true);\n});\n' \
+            > "${work}/tests/ProbeTest.php"
+          printf '<?php\n\ndeclare(strict_types=1);\n\nrequire "%s/vendor/autoload.php";\n\nuse Matchory\\CodingStyle\\Rector\\Preset;\nuse Rector\\Config\\RectorConfig;\n\nreturn Preset::pest(RectorConfig::configure())->withPaths(["%s/tests"]);\n' \
+            "${GITHUB_WORKSPACE}" "${work}" > "${work}/rector.php"
+
+          output="$(vendor/bin/rector process --dry-run --no-progress-bar --config="${work}/rector.php" || true)"
+          printf '%s\n' "${output}"
+
+          if ! printf '%s\n' "${output}" | grep -q 'SimplifyToLiteralBooleanRector'; then
+            echo "::error::the pest() preset registered no rules; check the provider probe class"
+            exit 1
+          fi
 
       # base.neon may only declare parameters that no other auto-discovered extension declares,
       # because PHPStan merges extension configs after includes and the last one wins. A parameter

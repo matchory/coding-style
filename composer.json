@@ -11,7 +11,7 @@
         }
     ],
     "require": {
-        "php": "^8.2",
+        "php": "^8.5",
         "laravel/pint": "^1.27",
         "phpstan/extension-installer": "^1.4",
         "phpstan/phpstan": "^2.1.22",
@@ -20,13 +20,13 @@
     },
     "require-dev": {
         "driftingly/rector-laravel": "^2.0.6",
-        "mrpunyapal/rector-pest": "^0.2.17",
-        "nette/neon": "^3.4"
+        "nette/neon": "^3.4",
+        "pestphp/pest-plugin-rector": "^5.0"
     },
     "suggest": {
         "driftingly/rector-laravel": "Required by the Rector `laravel` preset",
         "larastan/larastan": "Required by the PHPStan `laravel.neon` preset",
-        "mrpunyapal/rector-pest": "Required by the Rector `pest` preset",
+        "pestphp/pest-plugin-rector": "Required by the Rector `pest` preset",
         "pestphp/pest": "Required by the PHPStan `pest.neon` preset"
     },
     "autoload": {

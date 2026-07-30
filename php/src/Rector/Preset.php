@@ -13,6 +13,14 @@ declare(strict_types=1);
 
 namespace Matchory\CodingStyle\Rector;
 
+use Pest\Rector\Rules\SimplifyToBeTruthyFalsyRector;
+use Pest\Rector\Rules\SimplifyToLiteralBooleanRector;
+use Pest\Rector\Rules\UseEachModifierRector;
+use Pest\Rector\Rules\UseToBeFileRector;
+use Pest\Rector\Rules\UseToBeInRector;
+use Pest\Rector\Rules\UseToBeListRector;
+use Pest\Rector\Rules\UseToContainOnlyInstancesOfRector;
+use Pest\Rector\Rules\UseToHaveKeysRector;
 use Rector\CodeQuality\Rector\Identical\FlipTypeControlToUseExclusiveTypeRector;
 use Rector\CodeQuality\Rector\Isset_\IssetOnPropertyObjectToPropertyExistsRector;
 use Rector\CodingStyle\Rector\Catch_\CatchExceptionNameMatchingTypeRector;
@@ -34,15 +42,6 @@ use RectorLaravel\Rector\MethodCall\UseComponentPropertyWithinCommandsRector;
 use RectorLaravel\Rector\MethodCall\WhereToWhereLikeRector;
 use RectorLaravel\Rector\PropertyFetch\ReplaceFakerInstanceWithHelperRector;
 use RectorLaravel\Set\LaravelSetList;
-use RectorPest\Rules\SimplifyToBeTruthyFalsyRector;
-use RectorPest\Rules\SimplifyToLiteralBooleanRector;
-use RectorPest\Rules\UseEachModifierRector;
-use RectorPest\Rules\UseToBeFileRector;
-use RectorPest\Rules\UseToBeInRector;
-use RectorPest\Rules\UseToBeListRector;
-use RectorPest\Rules\UseToContainOnlyInstancesOfRector;
-use RectorPest\Rules\UseToHaveKeysRector;
-use RectorPest\Set\PestSetList;
 
 /**
  * Composable Rector presets.
@@ -173,10 +172,8 @@ final class Preset
             return $config;
         }
 
-        if (self::has(PestSetList::class)) {
-            $config = $config->withSets([PestSetList::PEST_LARAVEL]);
-        }
-
+        // `pestphp/pest-plugin-rector` has no Laravel-flavoured set, unlike the abandoned
+        // `mrpunyapal/rector-pest` it replaced. Nothing to add here beyond what pest() already did.
         return $config
             ->withComposerBased(laravel: true)
             ->withSets([
@@ -231,23 +228,36 @@ final class Preset
     }
 
     /**
-     * Pest rules, when `mrpunyapal/rector-pest` is installed.
+     * Pest rules, when `pestphp/pest-plugin-rector` is installed.
      *
      * Applied by {@see self::library()} and {@see self::laravel()}; call it directly only for a
      * project that uses Pest without either.
+     *
+     * `PestSetList::CODING_STYLE` is deliberately NOT imported. It bundles 59 rules, and among them
+     * are the chain-manipulating kind (`ChainExpectCallsRector`, `EnsureTypeChecksFirstRector`) that
+     * corrupted chained expectations under the package this replaced, plus one-shot Pest 2 to Pest 3
+     * migration rules that have no business running on every pass. Only individually vetted rules are
+     * enabled below.
+     *
+     * A repository that wants the full set can opt in locally, and should review the diff carefully:
+     *
+     * ```php
+     * use Pest\Rector\Set\PestSetList;
+     *
+     * return Preset::laravel(RectorConfig::configure())
+     *     ->withSets([PestSetList::CODING_STYLE]);
+     * ```
      */
     public static function pest(RectorConfigBuilder $config): RectorConfigBuilder
     {
-        if (self::isApplied($config, __FUNCTION__) || ! self::has(PestSetList::class)) {
+        if (
+            self::isApplied($config, __FUNCTION__)
+            || ! self::has(SimplifyToLiteralBooleanRector::class)
+        ) {
             return $config;
         }
 
         return $config
-            ->withSets([
-                // PEST_CODE_QUALITY is deliberately NOT imported as a set: half its rules corrupt
-                // chained expectations. The individually verified ones are listed below.
-                PestSetList::PEST_CHAIN,
-            ])
             ->withRules([
                 SimplifyToLiteralBooleanRector::class,
                 SimplifyToBeTruthyFalsyRector::class,
@@ -267,9 +277,9 @@ final class Preset
      * Laravel applications, composer packages and plain scripts, and a shared preset that fataled on
      * the ones without Laravel would just get copy-pasted instead of installed.
      */
-    private static function has(string $setList): bool
+    private static function has(string $probeClass): bool
     {
-        return class_exists($setList);
+        return class_exists($probeClass);
     }
 
     /**

@@ -67,9 +67,10 @@ useful thing to be able to say — but expect Renovate noise and group the updat
 composer require --dev matchory/coding-style
 ```
 
-The package requires Pint, PHPStan, Rector and `tomasvotruba/cognitive-complexity`, so it owns those
-versions centrally. Install `larastan/larastan`, `driftingly/rector-laravel` and
-`mrpunyapal/rector-pest` alongside it for the Laravel and Pest presets.
+Requires PHP 8.5. The package requires Pint, PHPStan, Rector and
+`tomasvotruba/cognitive-complexity`, so it owns those versions centrally. Install
+`larastan/larastan`, `driftingly/rector-laravel` and `pestphp/pest-plugin-rector` alongside it for the
+Laravel and Pest presets.
 
 ### Pint
 
@@ -193,6 +194,22 @@ return Preset::laravel(RectorConfig::configure())
 preset adds to it. Framework sets are applied only when the package providing them is installed, so
 the same preset works in a Laravel application and a plain script; a missing provider downgrades the
 preset rather than failing it.
+
+Applying a preset twice is a no-op. `withPhpSets()` throws on a second call, and because the presets
+build on one another, `Preset::laravel(Preset::base($config))` would otherwise reach `base()` twice
+and fatal.
+
+The Pest rules come from `pestphp/pest-plugin-rector`. Its `PestSetList::CODING_STYLE` is **not**
+imported: the set bundles 59 rules, including chain-manipulating ones (`ChainExpectCallsRector`,
+`EnsureTypeChecksFirstRector`) of the kind that corrupted chained expectations under the abandoned
+package this replaced, plus one-shot Pest 2 → Pest 3 migration rules that should not run on every
+pass. Eight individually vetted rules are enabled instead. Opt into the full set locally if you want
+it, and read the diff:
+
+```php
+return Preset::laravel(RectorConfig::configure())
+    ->withSets([\Pest\Rector\Set\PestSetList::CODING_STYLE]);
+```
 
 ### `.editorconfig`
 
