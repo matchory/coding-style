@@ -22,9 +22,29 @@ even though nothing about the interface moved.
 
 Nothing yet.
 
-## [0.1.1] — 2026-07-30
+## [0.1.2] — 2026-07-30
 
-First published release.
+First release published to every registry.
+
+`0.1.1` reached npmjs, with provenance, but its PyPI and GitHub Packages jobs failed on two workflow
+bugs, so it exists on npmjs alone. Both are fixed here:
+
+- The checksum manifest was generated as `sha256sum dist/*`, which embeds the `dist/` prefix, while the
+  publish job verifies it after `cd dist` — so every path resolved to `dist/dist/...` and could not be
+  opened. It is now generated from inside `dist/` with bare filenames, and CI round-trips it the way the
+  release does, including asserting that it still detects a tampered artefact.
+- `publishConfig.provenance: true` is baked into the published tarball, so npm attempted provenance on
+  the GitHub Packages publish too and failed for want of an `id-token` permission that job is
+  deliberately not granted. The declaration is gone; the npmjs job passes `--provenance` explicitly, so
+  the intent is per-registry rather than per-tarball.
+
+Version tags cannot be moved or deleted in this repository, so `0.1.1` stays on npmjs as a superseded
+version rather than being retracted. PyPI has no `0.1.1`; the three ecosystems are aligned again from
+`0.1.2` onward.
+
+## [0.1.1] — 2026-07-30 [npmjs only]
+
+Published to npmjs only; see `0.1.2`.
 
 `v0.1.0` was tagged but never published. Its release run failed in the first job, because the workflow
 used `git cat-file` to check that the tag was annotated and `actions/checkout` materialises a tag ref as
@@ -102,5 +122,6 @@ ecosystems, so a malicious version would run in our CI and on developer machines
 Composer has no artefact provenance mechanism, so the PHP package's integrity rests on repository
 protection and signed tags instead.
 
-[Unreleased]: https://github.com/matchory/coding-style/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/matchory/coding-style/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/matchory/coding-style/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/matchory/coding-style/releases/tag/v0.1.1
