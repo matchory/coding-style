@@ -104,8 +104,10 @@ Stated explicitly rather than left for someone to discover:
 - **Secret scanning is currently disabled** by an organisation-level security configuration, which a
   repository administrator cannot override. It is free for public repositories and should be enabled
   org-wide.
-- **Immutable releases** are not currently exposed through the REST API, so the setting must be
-  confirmed in the repository's UI under Settings → General.
+- **Immutable releases** are not exposed through the REST API. A repository ruleset covers the
+  important half: `refs/tags/v*` cannot be deleted, updated, force-pushed, or created unsigned, so a
+  published version tag cannot be moved to different code. Confirm the GitHub-native setting in
+  Settings → General as well, if it is available to the organisation.
 - **No egress filtering on runners.** `step-security/harden-runner` is the usual recommendation and
   would detect a build step phoning home. It is deliberately absent: adding a third-party action to
   the publish path widens the trusted set on exactly the job where that matters most. Worth revisiting

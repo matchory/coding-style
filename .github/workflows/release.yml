@@ -29,8 +29,9 @@ permissions: {}
 
 env:
   # Trusted publishing needs npm 11.5.1 or newer. setup-node bundles whatever shipped with the Node
-  # release, so the version is pinned explicitly rather than left to chance.
-  NPM_VERSION: '11'
+  # release, so the version is pinned to an exact patch rather than left to a floating major. Renovate
+  # keeps it current.
+  NPM_VERSION: '12.0.2'
 
 jobs:
   verify:
