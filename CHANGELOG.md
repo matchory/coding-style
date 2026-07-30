@@ -22,7 +22,16 @@ even though nothing about the interface moved.
 
 Nothing yet.
 
-## [0.1.0] — 2026-07-30
+## [0.1.1] — 2026-07-30
+
+First published release.
+
+`v0.1.0` was tagged but never published. Its release run failed in the first job, because the workflow
+used `git cat-file` to check that the tag was annotated and `actions/checkout` materialises a tag ref as
+a lightweight local tag inside a runner. The tag itself was correct; the check was not. Since the
+repository forbids deleting or moving a `v*` tag — a control that did its job here, refusing even an
+administrator — the tag stays, pointing at a commit that was never released, and the first published
+version is `0.1.1`.
 
 First release. Presets for Pint, PHPStan, Rector, oxlint, oxfmt, ESLint, TypeScript and ruff, plus the
 canonical `.editorconfig`.
@@ -93,5 +102,5 @@ ecosystems, so a malicious version would run in our CI and on developer machines
 Composer has no artefact provenance mechanism, so the PHP package's integrity rests on repository
 protection and signed tags instead.
 
-[Unreleased]: https://github.com/matchory/coding-style/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/matchory/coding-style/releases/tag/v0.1.0
+[Unreleased]: https://github.com/matchory/coding-style/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/matchory/coding-style/releases/tag/v0.1.1

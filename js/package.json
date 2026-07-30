@@ -1,6 +1,6 @@
 {
   "name": "@matchory/coding-style",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared code style configuration for Matchory projects: oxlint, oxfmt, ESLint and TypeScript presets.",
   "license": "MIT",
   "private": false,
