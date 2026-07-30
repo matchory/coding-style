@@ -27,6 +27,12 @@ npm audit signatures
 **PyPI** — published with [PEP 740](https://peps.python.org/pep-0740/) attestations, visible under
 the file's details on PyPI.
 
+The npm package is published to **npmjs and GitHub Packages** from the same attested tarball, because
+npm resolves registries per scope and `@matchory/ui` lives on GitHub Packages. The two copies are
+byte-identical, verified by SHA-256 before each upload. Only the npmjs copy carries an npm provenance
+statement: GitHub Packages neither displays nor verifies them, so generating a second statement there
+would add a claim nobody can check. The GitHub artefact attestation below covers both.
+
 **GitHub artefact attestations** — both the npm tarball and the Python distributions are attested and
 attached to the release:
 
@@ -99,6 +105,9 @@ Stated explicitly rather than left for someone to discover:
 
 - **Composer has no artefact provenance.** See above. The mitigation is repository protection plus
   signed tags.
+- **The GitHub Packages copy has no npm provenance statement**, only the shared GitHub artefact
+  attestation. It is byte-identical to the npmjs copy, which does carry provenance, and the checksum is
+  verified before upload. Verify against npmjs if you need the provenance chain.
 - **`@matchory/coding-style@0.0.0` was published from a maintainer machine and has no provenance.** npm
   cannot configure a trusted publisher for a package that does not exist, so something had to be
   published first. The placeholder contains only a README and the licence, is deprecated, and is not
