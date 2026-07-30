@@ -66,6 +66,8 @@ or by repository configuration, not by convention.
 | **`--ignore-scripts` when installing to build.** | A dependency lifecycle hook executing on the machine that produces a published artefact. |
 | **Lockfile enforced** (`--frozen-lockfile`). | A resolution change slipping in between review and release. |
 | **Version agreement checked** across all three manifests and the tag. | Publishing artefacts nobody can correlate across ecosystems. |
+| **`--registry` pinned on the publish command.** | An ambient `.npmrc` redirecting a provenance-signed release to another registry. `publishConfig.registry` does *not* beat an `@scope:registry` entry, and npm's provenance code does not validate the destination registry. |
+| **dist-tag derived from the version.** A prerelease publishes to `rc`/`beta`/`next`, never `latest`. | A prerelease silently becoming the default install for every consumer. |
 
 ## Repository configuration
 
@@ -114,6 +116,13 @@ Stated explicitly rather than left for someone to discover:
   important half: `refs/tags/v*` cannot be deleted, updated, force-pushed, or created unsigned, so a
   published version tag cannot be moved to different code. Confirm the GitHub-native setting in
   Settings → General as well, if it is available to the organisation.
+- **The build/publish split is not npm's documented shape.** npm's recommended workflow publishes from
+  the source directory in a single job; this one builds a tarball, attests it, and publishes that
+  artefact from a separate job. The split was kept because it is what makes "publish cannot substitute
+  content" true, and because it matches PyPA's recommendation for PyPI. It was verified against npm's
+  implementation rather than assumed: `libnpmpublish` derives the provenance subject from the tarball's
+  own integrity digest and the build metadata from GitHub Actions environment variables, so no source
+  directory is required and provenance is generated identically either way.
 - **No egress filtering on runners.** `step-security/harden-runner` is the usual recommendation and
   would detect a build step phoning home. It is deliberately absent: adding a third-party action to
   the publish path widens the trusted set on exactly the job where that matters most. Worth revisiting
