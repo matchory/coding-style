@@ -86,23 +86,30 @@ jobs:
 
           echo "Releasing ${version} to dist-tag '${channel}' (prerelease: ${prerelease})"
 
-      # An unsigned tag is an unauthenticated instruction to publish. GitHub's own verification
-      # status is used rather than importing keys here, so the check reflects the same trust GitHub
-      # shows in the UI.
+      # An unsigned tag is an unauthenticated instruction to publish.
+      #
+      # Both facts come from the API rather than the local repository, because `actions/checkout`
+      # materialises a tag ref as a LIGHTWEIGHT local tag pointing straight at the commit. So
+      # `git cat-file -t <tag>` reports `commit` inside a runner even for a properly annotated,
+      # verified tag — which is exactly what rejected a good v0.1.0 on the first attempt. The API sees
+      # the real object, and using it also means the signature check reflects the same trust GitHub
+      # shows in its UI.
       - name: Tag is annotated and signed by a verified key
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          object_type="$(git cat-file -t "${GITHUB_REF_NAME}")"
+          ref="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}")"
+          object_type="$(printf '%s' "${ref}" | jq -r '.object.type')"
+          object_sha="$(printf '%s' "${ref}" | jq -r '.object.sha')"
 
           if [ "${object_type}" != 'tag' ]; then
-            echo "::error::${GITHUB_REF_NAME} is a lightweight tag; release tags must be annotated and signed"
+            echo "::error::${GITHUB_REF_NAME} is a lightweight tag (ref points at a ${object_type}); release tags must be annotated and signed"
             exit 1
           fi
 
-          tag_sha="$(git rev-parse "${GITHUB_REF_NAME}")"
-          verified="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.verified')"
-          reason="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.reason')"
+          verification="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${object_sha}" --jq '.verification')"
+          verified="$(printf '%s' "${verification}" | jq -r '.verified')"
+          reason="$(printf '%s' "${verification}" | jq -r '.reason')"
 
           if [ "${verified}" != 'true' ]; then
             echo "::error::tag signature is not verified (${reason})"
