@@ -1,0 +1,48 @@
+; Canonical Matchory .editorconfig.
+;
+; EditorConfig has no mechanism for extending a file shipped inside a package: `root = false`
+; chaining only walks up the directory tree. This file is therefore distributed by copy. Run
+; `vendor/bin/matchory-coding-style sync`, `npx matchory-coding-style sync`, or the
+; `matchory-coding-style-sync` pre-commit hook to refresh it in a consuming repository.
+;
+; Edit it here, never in a consumer.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# JavaScript / TypeScript / Vue — formatted by oxfmt
+[*.{js,mjs,cjs,ts,mts,cts,tsx,vue}]
+max_line_length = 100
+ij_javascript_use_double_quotes = false
+ij_typescript_use_double_quotes = false
+ij_javascript_force_quote_style = true
+ij_typescript_spaces_within_method_call_parentheses = false
+
+# JSON is two-space by convention; see the `tabWidth` override in the oxfmt base.
+[*.{json,jsonc,json5}]
+indent_size = 2
+
+# composer.json follows the four-space Composer convention
+[composer.json]
+indent_size = 4
+
+[*.{yml,yaml}]
+indent_size = 2
+
+# Python — formatted by ruff
+[*.py]
+max_line_length = 100
+
+[*.{toml,tf}]
+indent_size = 2
+
+# Markdown: trailing whitespace is significant (hard line breaks)
+[*.md]
+trim_trailing_whitespace = false

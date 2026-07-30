@@ -1,0 +1,41 @@
+# Exemptions for code where cognitive complexity is not a useful signal. Opt in explicitly:
+#
+#     includes:
+#         - vendor/matchory/coding-style/php/phpstan/complexity.neon
+#
+# The thresholds themselves CANNOT be shipped from here, and this was verified rather than assumed.
+# `tomasvotruba/cognitive-complexity` declares its own defaults (class: 40, function: 9) in an
+# auto-discovered extension config, and PHPStan merges those after every `includes:` but before the
+# root config file's own `parameters`. So a value set in this file — or in the auto-discovered
+# base.neon — is silently overwritten, with `phpstan dump-parameters` the only way to see it.
+#
+# Declare them in your own phpstan.neon instead. Canonical values, matching Sonar's commonly cited
+# guidance rather than the far stricter package defaults:
+#
+#     parameters:
+#         cognitive_complexity:
+#             class: 50
+#             function: 15
+#
+# The path patterns below are fnmatch globs anchored nowhere, so they match regardless of where a
+# repository puts its tests or migrations. Unlike parameters, ignoreErrors entries are appended, so
+# they work fine from an include.
+
+parameters:
+    ignoreErrors:
+        # Test bodies are long and branchy by nature, and splitting them to satisfy a metric makes
+        # them harder to read, not easier.
+        -
+            identifier: complexity.functionLike
+            path: '*/tests/*'
+        -
+            identifier: complexity.classLike
+            path: '*/tests/*'
+
+        # Migrations are one-shot scripts.
+        -
+            identifier: complexity.functionLike
+            path: '*/migrations/*'
+        -
+            identifier: complexity.classLike
+            path: '*/migrations/*'

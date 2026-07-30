@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "_comment": [
+    "For Node programs: CLIs, GitHub Actions, build scripts. Drops the DOM libs so browser globals",
+    "are a type error rather than a runtime surprise. Requires @types/node in the consuming package."
+  ],
+  "extends": "./base.json",
+  "compilerOptions": {
+    "moduleResolution": "nodenext",
+    "module": "nodenext",
+    "types": ["node"]
+  }
+}

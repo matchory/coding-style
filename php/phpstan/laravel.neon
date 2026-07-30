@@ -1,0 +1,25 @@
+# Laravel/Larastan boilerplate: opt in explicitly.
+#
+#     includes:
+#         - vendor/matchory/coding-style/php/phpstan/laravel.neon
+#
+# Requires `larastan/larastan`, which registers itself through phpstan/extension-installer. This
+# file only carries the settings and ignores that Larastan does not, and that every Laravel
+# application ends up needing.
+
+parameters:
+    # Larastan cannot handle PostgreSQL migrations, see:
+    #  - https://github.com/larastan/larastan/blob/3.x/docs/custom-config-parameters.md#postgresql
+    #  - https://github.com/larastan/larastan/issues/2230
+    #
+    # Both default to scanning. Override locally if the project is on MySQL and wants the extra
+    # column type inference.
+    disableMigrationScan: true
+    disableSchemaScan: true
+
+    ignoreErrors:
+        # Models that use Eloquent concerns without extending Model — index/search model variants,
+        # value objects that reuse the event plumbing.
+        -
+            message: '#Trait Illuminate\\Database\\Eloquent\\Concerns\\HasEvents requires using class to extend Illuminate\\Database\\Eloquent\\Model, but .+ does not.#'
+            identifier: class.missingExtends

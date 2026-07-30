@@ -1,0 +1,63 @@
+# Adoptable ruff baseline for every Matchory Python project.
+#
+# Sized so that a repository with no ruff configuration at all can turn this on today and get a
+# finding count it can actually work through. `supplier-insights`, `platform` and `semantic_search`
+# are the target: a stricter default is a standard nobody adopts.
+#
+# Graduate to `strict.toml` once a repository is clean. That preset extends this one, so nothing here
+# is repeated there.
+#
+# Not consumed via `extend` from inside the installed package: site-packages paths embed the Python
+# version and do not survive a recreated virtualenv. Run `matchory-coding-style sync` to write
+# `.matchory/ruff.toml` into the repository and point `pyproject.toml` at that:
+#
+#     [tool.ruff]
+#     extend = ".matchory/ruff.toml"
+
+line-length = 100
+indent-width = 4
+
+[lint]
+select = [
+    "B",   # flake8-bugbear
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "PTH", # flake8-use-pathlib
+    "RUF", # ruff-specific
+    "S",   # flake8-bandit
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+    "W",   # pycodestyle warnings
+]
+
+ignore = [
+    # `assert` is how pytest expresses every assertion.
+    "S101",
+
+    # Conflicts with the formatter: ruff format decides where trailing commas go.
+    "COM812",
+]
+
+[lint.per-file-ignores]
+"**/tests/**" = [
+    # Test helpers legitimately hardcode credentials and call subprocesses.
+    "S105",
+    "S106",
+    "S107",
+    # Import-inside-function is a normal way to isolate a fixture's dependencies.
+    "PLC0415",
+]
+
+[lint.flake8-tidy-imports]
+# Relative imports make a module's position in the tree load-bearing, which breaks the moment
+# anything is moved.
+ban-relative-imports = "all"
+
+[lint.isort]
+combine-as-imports = true
+
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

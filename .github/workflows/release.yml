@@ -1,0 +1,100 @@
+name: Release
+
+# Publishing is driven by tags. The three packages deliberately share one version line: Composer
+# requires a semver-parseable tag at the repository root, so prefixed tags like `php/v1.2.0` are not
+# an option. A change touching only one ecosystem still bumps the version the others see.
+#
+# Only the npm package needs an explicit publish step:
+#
+#   - Composer: Repman reads tags from the repository. Configure its webhook once and every tag is
+#     picked up with no workflow involvement.
+#   - Python: consumers install from git at a tag, so there is nothing to upload.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Pack the npm tarball without publishing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  verify:
+    name: Verify the tag matches the manifests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: version
+        name: Resolve version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(node -p "require('./js/package.json').version")"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${version}"
+
+      # A tag that disagrees with the manifests would publish an npm version nobody can correlate
+      # with the Composer or Python one, which defeats the shared version line.
+      - name: Manifest versions agree with the tag
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          npm_version="$(node -p "require('./js/package.json').version")"
+          py_version="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
+          init_version="$(grep -m1 '^__version__' src/matchory_coding_style/__init__.py | cut -d'"' -f2)"
+
+          status=0
+          for pair in "js/package.json:${npm_version}" "pyproject.toml:${py_version}" "__init__.py:${init_version}"; do
+            name="${pair%%:*}"
+            found="${pair##*:}"
+            if [ "${found}" != "${version}" ]; then
+              echo "::error::${name} declares ${found}, tag says ${version}"
+              status=1
+            fi
+          done
+          exit "${status}"
+
+  npm:
+    name: Publish to GitHub Packages
+    needs: verify
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: js
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@matchory'
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      # The published tarball must carry the committed generated files, not stale ones.
+      - name: Generated files are current
+        run: node scripts/generate.mjs --check
+
+      - name: Pack
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: github.event_name == 'push' || inputs.dry-run == false
+        run: npm publish --provenance --access restricted
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,15 @@
+/vendor/
+/composer.lock
+
+/js/node_modules/
+
+/.venv/
+/dist/
+/build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+
+/.cache/
+/.ruff_cache/
+.DS_Store

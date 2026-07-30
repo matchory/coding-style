@@ -1,0 +1,43 @@
+# The Python package lives at the repository root rather than in a `python/` subdirectory, for two
+# reasons that leave no choice:
+#
+#   - `pip install git+ssh://…` and uv's git sources look for project metadata at the root unless
+#     every consumer remembers to append `#subdirectory=`.
+#   - pre-commit builds a hook repository as a Python package from its root, so `.pre-commit-hooks.yaml`
+#     next to a root pyproject.toml is the only layout it accepts.
+#
+# The PHP package is also forced to the root, because Composer has no `#subdirectory` equivalent and
+# Repman reads composer.json from the repository root. Only the npm package can live in a
+# subdirectory, so it does: `js/`.
+
+[project]
+name = "matchory-coding-style"
+version = "0.1.0"
+description = "Shared code style configuration for Matchory projects: ruff presets and the canonical .editorconfig."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Matchory GmbH", email = "info@matchory.com" }]
+dependencies = ["ruff>=0.14.0"]
+
+[project.urls]
+Repository = "https://github.com/matchory/coding-style"
+
+[project.scripts]
+matchory-coding-style = "matchory_coding_style.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/matchory_coding_style"]
+
+# The canonical .editorconfig is mirrored into the package as
+# src/matchory_coding_style/data/editorconfig rather than force-included from the repository root, so
+# that a source checkout and an installed wheel resolve it identically. CI asserts the copy matches.
+
+# This repository lints itself with the preset it ships. `extend` takes a path, which is exactly the
+# limitation that makes a sync step necessary for consumers — here the file is simply local.
+[tool.ruff]
+extend = "src/matchory_coding_style/ruff/strict.toml"

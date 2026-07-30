@@ -1,0 +1,20 @@
+# Exercises the PHPStan presets by analysing this package's own source with them applied.
+#
+# `laravel.neon` is deliberately absent: it sets `disableMigrationScan` and `disableSchemaScan`,
+# which are registered by Larastan, so including it without a Larastan-equipped Laravel application
+# would fail with an unknown-parameter error rather than telling us anything about the preset. Its
+# syntax is covered by the neon parse check instead.
+#
+# `base.neon` IS listed, even though consumers get it automatically. extension-installer only scans
+# installed packages, never the root one, so it does not discover this package from inside this
+# repository. Auto-discovery is verified separately, from a throwaway consumer.
+
+includes:
+    - ../php/phpstan/base.neon
+    - ../php/phpstan/pest.neon
+    - ../php/phpstan/complexity.neon
+
+parameters:
+    level: 6
+    paths:
+        - ../php/src

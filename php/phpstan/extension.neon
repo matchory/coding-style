@@ -1,0 +1,17 @@
+# Auto-discovered by phpstan/extension-installer, because this package declares
+# `type: phpstan-extension` and `extra.phpstan.includes` in its composer.json. It is applied to
+# EVERY consumer the moment the package is installed, with no opt-in line in their phpstan.neon.
+#
+# That invisibility is the point (it is what stops configuration from drifting), but it also means
+# anything in here is hard to trace back from a failing analysis run. So this file deliberately
+# pulls in nothing but `base.neon`, which is limited to settings that are safe and meaningful in
+# any PHP codebase.
+#
+# Everything else is opt-in. Consumers add the presets they want explicitly:
+#
+#     includes:
+#         - vendor/matchory/coding-style/php/phpstan/laravel.neon
+#         - vendor/matchory/coding-style/php/phpstan/pest.neon
+
+includes:
+    - base.neon

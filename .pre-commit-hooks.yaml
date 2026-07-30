@@ -1,0 +1,39 @@
+#  Hooks for Python repositories. Add to .pre-commit-config.yaml:
+#
+#     repos:
+#       - repo: https://github.com/matchory/coding-style
+#         rev: v0.1.0
+#         hooks:
+#           - id: matchory-coding-style
+#           - id: matchory-ruff
+#           - id: matchory-ruff-format
+#
+#  `matchory-coding-style` keeps the copied configuration current, which is the whole reason this
+#  repository exists: without it, `.matchory/ruff.toml` silently pins whatever preset was in place the
+#  day it was first written.
+
+- id: matchory-coding-style
+  name: Sync Matchory style configuration
+  description: >
+    Verify that .editorconfig and the copied ruff presets match the version this hook pins. Fails
+    with the command to run when they have drifted.
+  entry: matchory-coding-style sync --check
+  language: python
+  pass_filenames: false
+  always_run: true
+
+- id: matchory-ruff
+  name: ruff (Matchory preset)
+  description: Lint with the ruff version pinned by matchory-coding-style.
+  entry: ruff check --force-exclude --fix
+  language: python
+  types_or: [python, pyi]
+  require_serial: true
+
+- id: matchory-ruff-format
+  name: ruff format (Matchory preset)
+  description: Format with the ruff version pinned by matchory-coding-style.
+  entry: ruff format --force-exclude
+  language: python
+  types_or: [python, pyi]
+  require_serial: true

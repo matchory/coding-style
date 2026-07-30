@@ -1,0 +1,54 @@
+# Pest boilerplate: opt in explicitly.
+#
+#     includes:
+#         - vendor/matchory/coding-style/php/phpstan/pest.neon
+#
+# Every entry here exists because Pest binds `$this` and proxies calls at runtime in ways PHPStan
+# cannot follow statically. None of it is project-specific, which is why it belongs in a shared
+# preset rather than being copied into each repository's ignoreErrors block.
+#
+# `paths` are intentionally NOT constrained to `tests/` here, because the test directory is named
+# differently across repositories. Scope these ignores locally if you need to.
+
+parameters:
+    # Pest's own extension.neon registers Pest\Expectation as a universal object crate, which is
+    # what makes its magic properties ($not, $each, and the value's own properties) resolve. It
+    # omits Pest\Mixins\Expectation — the type every matcher returns — so any property access
+    # *after* a matcher (expect($x)->toBeArray()->not->toBeEmpty()) would otherwise be reported as
+    # undefined.
+    universalObjectCratesClasses:
+        - Pest\Mixins\Expectation
+
+    stubFiles:
+        - stubs/pest.stub.php
+        - stubs/pest-functions.stub.php
+
+    ignoreErrors:
+        # Pest dynamically binds $this to the configured TestCase at runtime, which PHPStan cannot
+        # understand.
+        -
+            message: '#Call to an undefined method PHPUnit\\Framework\\TestCase::\w+\(\)\.#'
+            identifier: method.notFound
+        -
+            message: '#Access to an undefined property PHPUnit\\Framework\\TestCase::\$\w+\.#'
+            identifier: property.notFound
+
+        # Pest's TestCall proxies method calls and property access to the underlying TestCase at
+        # runtime, but PHPStan sees the static type as TestCall, which lacks these members. Pest 4.5
+        # also reports $this as TestCall inside describe/beforeEach blocks — same dynamic binding.
+        -
+            message: '#Call to an undefined method Pest\\PendingCalls\\TestCall::\w+\(\)\.#'
+            identifier: method.notFound
+        -
+            message: '#Access to an undefined property Pest\\PendingCalls\\TestCall::\$\w+\.#'
+            identifier: property.notFound
+
+        # Pest\Expectation::extend() is typed against a Closure returning Pest\Expectation, but
+        # custom expectations legitimately return the narrowed mixin type.
+        -
+            message: '#Parameter \#\d+ \$extend of method Pest\\Expectation(<mixed>)?::extend\(\) expects Closure\(mixed\): Pest\\Expectation(<mixed>)?, Closure\(.*\): Pest\\Expectation(<mixed>)? given\.#'
+
+        # Traits mixed into Pest test files via `uses(...)` are applied dynamically to anonymous test
+        # classes, so PHPStan's trait-usage analysis never sees them used.
+        -
+            identifier: trait.unused

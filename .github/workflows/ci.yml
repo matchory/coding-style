@@ -1,0 +1,232 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  editorconfig:
+    name: .editorconfig copies are identical
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The canonical file is mirrored into the npm and Python packages so each can be installed
+      # standalone. Nothing enforces that at runtime, so it is enforced here.
+      - name: Compare mirrors against the canonical file
+        run: |
+          diff -u .editorconfig js/generated/.editorconfig
+          diff -u .editorconfig src/matchory_coding_style/data/editorconfig
+
+  php:
+    name: PHP presets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      # Every preset is only ever read by another tool, so a typo would otherwise surface in a
+      # consumer rather than here.
+      - name: Pint presets are derived from base.json
+        run: php php/bin/generate-pint-presets.php --check
+
+      - name: Pint presets are valid
+        run: |
+          for preset in php/pint/*.json; do
+            echo "::group::${preset}"
+            vendor/bin/pint --config "${preset}" --test php/src || true
+            php -r 'json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);' "${preset}"
+            echo "::endgroup::"
+          done
+
+      # Covers laravel.neon too, which cannot be included in a real run here: its parameters are
+      # registered by Larastan and need a Laravel application to resolve.
+      - name: PHPStan presets are valid neon
+        run: |
+          php -r '
+            require "vendor/autoload.php";
+            $failed = false;
+            foreach (glob("php/phpstan/*.neon") as $preset) {
+                try {
+                    Nette\Neon\Neon::decodeFile($preset);
+                    printf("ok    %s\n", $preset);
+                } catch (Throwable $exception) {
+                    printf("FAIL  %s: %s\n", $preset, $exception->getMessage());
+                    $failed = true;
+                }
+            }
+            exit($failed ? 1 : 0);
+          '
+
+      - name: PHPStan presets apply
+        run: |
+          # Analysing this package's own source proves the stub paths resolve, the ignore patterns
+          # compile, and base.neon really does arrive via extension-installer.
+          vendor/bin/phpstan analyse --no-progress \
+            --configuration=.github/phpstan-ci.neon
+
+      - name: Rector presets build
+        run: vendor/bin/rector process --dry-run --no-progress-bar --config=.github/rector-build.php
+
+      - name: Rector library preset runs
+        run: vendor/bin/rector process --dry-run --no-progress-bar --config=.github/rector-ci.php
+
+      # base.neon may only declare parameters that no other auto-discovered extension declares,
+      # because PHPStan merges extension configs after includes and the last one wins. A parameter
+      # added here that another extension also sets would be silently discarded. This asserts the
+      # current set really does reach a consumer, using a throwaway project that installs the package
+      # the same way a real one does.
+      - name: Auto-discovered parameters reach a consumer
+        run: |
+          probe="$(mktemp -d)"
+          cat > "${probe}/composer.json" <<JSON
+          {
+              "name": "matchory/ci-probe",
+              "require-dev": { "matchory/coding-style": "*" },
+              "repositories": [
+                  { "type": "path", "url": "${GITHUB_WORKSPACE}", "options": { "symlink": false } }
+              ],
+              "config": { "allow-plugins": { "phpstan/extension-installer": true } },
+              "minimum-stability": "dev"
+          }
+          JSON
+          mkdir -p "${probe}/src"
+          printf '<?php\n\ndeclare(strict_types=1);\n\nfinal class Probe {}\n' > "${probe}/src/Probe.php"
+          printf 'parameters:\n    level: 5\n    paths:\n        - src\n' > "${probe}/phpstan.neon"
+
+          cd "${probe}"
+          composer install --no-interaction --no-progress
+          composer show matchory/coding-style > /dev/null
+
+          parameters="$(vendor/bin/phpstan dump-parameters)"
+          status=0
+          for expected in \
+            'reportUnmatchedIgnoredErrors: false' \
+            'treatPhpDocTypesAsCertain: false' \
+            "editorUrl: 'phpstorm://open?file=%file%&line=%line%'"
+          do
+            if ! printf '%s\n' "${parameters}" | grep -qF "${expected}"; then
+              echo "::error::base.neon did not reach the consumer: ${expected}"
+              status=1
+            fi
+          done
+
+          vendor/bin/matchory-coding-style sync
+          diff -u "${GITHUB_WORKSPACE}/.editorconfig" .editorconfig
+          vendor/bin/pint --config vendor/matchory/coding-style/php/pint/base.json --test src
+          exit "${status}"
+
+  javascript:
+    name: JavaScript presets
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: js
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: js/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Generated files are derived from src/
+        run: node scripts/generate.mjs --check
+
+      # buildFromOxlintConfig() reads the oxlint object at load time, so importing the ESLint presets
+      # proves both halves compose. A broken preset otherwise only fails inside a consumer.
+      - name: Presets import and compose
+        run: |
+          node --input-type=module -e '
+            import { core, withCore } from "./src/eslint/base.js";
+            import { vue, withVue } from "./src/eslint/vue.js";
+            import { oxlintBase } from "./src/oxlint/base.js";
+            import { oxlintVue } from "./src/oxlint/vue.js";
+            import { oxfmtBase } from "./src/oxfmt/base.js";
+
+            const assert = (condition, message) => {
+              if (!condition) { throw new Error(message); }
+            };
+
+            assert(core.length > 0, "eslint core is empty");
+            assert(withCore([{ files: ["x"] }]).length === core.length + 1, "withCore does not append");
+            assert(vue().length > core.length, "vue overlay adds nothing");
+            assert(withVue({}, [{ files: ["x"] }]).length === vue().length + 1, "withVue does not append");
+
+            assert(!oxlintBase.plugins.includes("vue"), "vue plugin leaked into the oxlint base");
+            assert(oxlintVue.plugins.includes("vue"), "vue plugin missing from the vue preset");
+            assert(
+              Object.keys(oxlintBase.rules).every((rule) => !rule.startsWith("vue/")),
+              "vue rules leaked into the oxlint base",
+            );
+
+            assert(oxfmtBase.tabWidth === 4, "canonical indentation changed");
+            assert(oxfmtBase.singleQuote === true, "canonical quote style changed");
+            assert(oxfmtBase.sortTailwindcss === undefined, "oxfmt must not own tailwind ordering");
+
+            console.log("presets compose");
+          '
+
+      - name: tsconfig presets resolve
+        run: |
+          for preset in src/tsconfig/*.json; do
+            echo "::group::${preset}"
+            echo '{"extends":"./'"${preset}"'","include":[]}' > "tsconfig.probe.json"
+            pnpm exec tsc --showConfig --project tsconfig.probe.json > /dev/null
+            rm tsconfig.probe.json
+            echo "::endgroup::"
+          done
+
+  python:
+    name: Python presets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build and install the package
+        run: uv pip install --system .
+
+      # The presets chain by relative path (selector -> strict -> base), which only holds if `sync`
+      # copies all of them. Running real ruff over a probe file is the only way to prove it.
+      - name: sync writes a config real ruff accepts
+        run: |
+          for preset in base strict; do
+            echo "::group::${preset}"
+            work="$(mktemp -d)"
+            matchory-coding-style sync --preset "${preset}" --project-root "${work}"
+            printf '[project]\nname = "probe"\nversion = "0.1.0"\n\n[tool.ruff]\nextend = ".matchory/ruff.toml"\n' \
+              > "${work}/pyproject.toml"
+            printf 'import os\n\n\ndef probe(value):\n    return os.path.join("a", value)\n' \
+              > "${work}/probe.py"
+            (cd "${work}" && ruff check --no-cache --output-format concise . || true)
+            (cd "${work}" && ruff format --no-cache --check . || true)
+            # A config that failed to resolve exits 2; findings exit 1.
+            (cd "${work}" && ruff check --no-cache --quiet . ; test "$?" -ne 2)
+            matchory-coding-style sync --preset "${preset}" --project-root "${work}" --check
+            echo "::endgroup::"
+          done
+
+      - name: This repository satisfies its own strict preset
+        run: ruff check --no-cache src/ && ruff format --no-cache --check src/

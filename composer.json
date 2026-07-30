@@ -1,0 +1,55 @@
+{
+    "name": "matchory/coding-style",
+    "description": "Shared code style configuration for Matchory projects: Pint, PHPStan and Rector presets.",
+    "type": "phpstan-extension",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Matchory GmbH",
+            "email": "info@matchory.com",
+            "homepage": "https://matchory.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "laravel/pint": "^1.27",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.1.22",
+        "rector/rector": "^2.1.3",
+        "tomasvotruba/cognitive-complexity": "^1.1"
+    },
+    "require-dev": {
+        "driftingly/rector-laravel": "^2.0.6",
+        "mrpunyapal/rector-pest": "^0.2.17",
+        "nette/neon": "^3.4"
+    },
+    "suggest": {
+        "driftingly/rector-laravel": "Required by the Rector `laravel` preset",
+        "larastan/larastan": "Required by the PHPStan `laravel.neon` preset",
+        "mrpunyapal/rector-pest": "Required by the Rector `pest` preset",
+        "pestphp/pest": "Required by the PHPStan `pest.neon` preset"
+    },
+    "autoload": {
+        "psr-4": {
+            "Matchory\\CodingStyle\\": "php/src/"
+        }
+    },
+    "bin": [
+        "php/bin/matchory-coding-style"
+    ],
+    "extra": {
+        "phpstan": {
+            "includes": [
+                "php/phpstan/extension.neon"
+            ]
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "phpstan/extension-installer": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

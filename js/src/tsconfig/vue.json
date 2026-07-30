@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "_comment": [
+    "For Vue applications and component libraries. Inherits @vue/tsconfig, which carries the",
+    "compiler options the Vue toolchain requires (jsx: preserve, jsxImportSource, and the DOM libs).",
+    "@vue/tsconfig is a dependency of @matchory/coding-style, so consumers do not install it",
+    "themselves: TypeScript resolves an `extends` package path relative to the file declaring it."
+  ],
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "sourceMap": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}

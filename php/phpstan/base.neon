@@ -1,0 +1,35 @@
+# Settings that are safe in any PHP codebase, applied automatically to every consumer via
+# extension.neon.
+#
+# Deliberately absent:
+#
+#   - `level`, `paths` and `excludePaths` are per-project decisions, and setting them from a vendor
+#     file that nobody included by hand is a debugging trap. Declare them locally.
+#   - `tmpDir`, because pointing the cache at a directory a consumer has not gitignored would
+#     silently start committing analysis caches.
+#
+# Everything here is a scalar or a small map, so a consumer's own phpstan.neon still wins: PHPStan
+# processes includes first and lets the including file override them.
+
+# A package config can only set a parameter that no OTHER auto-discovered extension also sets.
+# PHPStan merges extension configs after every `includes:`, but before the root config file's own
+# `parameters`, so whichever extension sorts last wins and only the consumer's own phpstan.neon beats
+# all of them.
+#
+# That is why complexity thresholds are absent here despite belonging conceptually:
+# `tomasvotruba/cognitive-complexity` declares its own defaults and sorts after
+# `matchory/coding-style`. See complexity.neon for the values to declare locally.
+#
+# The parameters below are safe because no other extension in this dependency set declares them.
+# Verify with `phpstan dump-parameters` before adding more.
+
+parameters:
+    editorUrl: 'phpstorm://open?file=%%file%%&line=%%line%%'
+    editorUrlTitle: '%%file%%:%%line%%'
+
+    treatPhpDocTypesAsCertain: false
+
+    # Shared ignoreErrors entries in the presets below cannot match in every repository that
+    # installs them. With this reporting enabled, a preset would hard-fail any consumer whose code
+    # happens not to trigger one of its ignores.
+    reportUnmatchedIgnoredErrors: false

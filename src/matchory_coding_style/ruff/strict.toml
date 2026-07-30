@@ -1,0 +1,82 @@
+# The target ruff configuration, derived from what `calliope` already enforces.
+#
+# Extends `base.toml`, so only the additions appear here. Adopt it in a repository that is already
+# clean under the base; `calliope` is on it today.
+#
+#     [tool.ruff]
+#     extend = ".matchory/ruff.toml"   # written by `matchory-coding-style sync --preset strict`
+
+extend = "base.toml"
+
+[lint]
+extend-select = [
+    "A",    # flake8-builtins
+    "ARG",  # flake8-unused-arguments
+    "BLE",  # flake8-blind-except
+    "C4",   # flake8-comprehensions
+    "C90",  # mccabe complexity
+    "D",    # pydocstyle
+    "DTZ",  # flake8-datetimez
+    "EM",   # flake8-errmsg
+    "ERA",  # eradicate (commented-out code)
+    "G",    # flake8-logging-format
+    "ICN",  # flake8-import-conventions
+    "INP",  # flake8-no-pep420
+    "ISC",  # flake8-implicit-str-concat
+    "N",    # pep8-naming
+    "PIE",  # flake8-pie
+    "PLC",  # pylint conventions
+    "PLE",  # pylint errors
+    "PLW",  # pylint warnings
+    "PT",   # flake8-pytest-style
+    "PYI",  # flake8-pyi
+    "Q",    # flake8-quotes
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "SLF",  # flake8-self
+    "T10",  # flake8-debugger
+    "T20",  # flake8-print
+    "TCH",  # flake8-type-checking
+    "TID",  # flake8-tidy-imports
+    "TRY",  # tryceratops
+    "YTT",  # flake8-2020
+]
+
+extend-ignore = [
+    # Missing docstrings. Enforcing a docstring on every module, class and function produces
+    # placeholder prose rather than documentation. `D` stays selected for the rules that check
+    # docstrings that DO exist.
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D107",
+
+    # Formatter-owned docstring layout.
+    "D200",
+    "D203",
+    "D212",
+
+    # Binding to 0.0.0.0 is intentional inside a container.
+    "S104",
+
+    # Non-cryptographic hashes (cache keys, content addressing) are a legitimate use of md5/sha1.
+    "S324",
+
+    # Reassigning a loop variable is idiomatic when normalising values.
+    "PLW2901",
+
+    # Private member access is how tests reach the thing they are testing.
+    "SLF001",
+]
+
+[lint.mccabe]
+# Matches the cognitive-complexity threshold the PHPStan preset uses, so the two ecosystems agree on
+# what "too complex" means.
+max-complexity = 15
+
+[lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "double"
+multiline-quotes = "double"

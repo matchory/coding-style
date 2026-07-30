@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "_comment": [
+    "Baseline TypeScript options for any Matchory package. Deliberately conservative: it turns on",
+    "`strict` and the modern module settings, and nothing that produces a large error count in an",
+    "existing codebase. Layer tsconfig/strict.json on top once a repository is clean:",
+    "  \"extends\": [\"@matchory/coding-style/tsconfig/base.json\", \"@matchory/coding-style/tsconfig/strict.json\"]"
+  ],
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext"],
+    "strict": true,
+    "noEmit": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}

@@ -1,0 +1,20 @@
+# The target analysis level for new and well-covered code: opt in explicitly.
+#
+#     includes:
+#         - vendor/matchory/coding-style/php/phpstan/strict.neon
+#
+# IMPORTANT: `level` set here only takes effect if the including phpstan.neon does NOT set its own.
+# PHPStan lets the including file override anything from an include, so a local `level: 5` silently
+# wins. Remove the local key when adopting this preset.
+#
+# Repositories that cannot reach level 9 yet should stay on a locally declared level and generate a
+# baseline instead of including this file. A baseline that shrinks over time beats a level that never
+# moves.
+
+parameters:
+    level: 9
+
+    # At level 9 the analysis is precise enough that PHPStan's own inferred types are worth trusting
+    # over docblocks, which turns "type is always true/false" into an actionable finding rather than
+    # noise.
+    treatPhpDocTypesAsCertain: true
