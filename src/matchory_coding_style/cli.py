@@ -21,11 +21,14 @@ from __future__ import annotations
 import argparse
 import sys
 from importlib import resources
-
-# Moved out of importlib.abc in 3.12 and removed from it in 3.14; importlib.resources.abc exists
-# from 3.11, which is this package's floor.
-from importlib.resources.abc import Traversable
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Moved out of importlib.abc in 3.12 and removed from it in 3.14; importlib.resources.abc exists
+    # from 3.11, which is this package's floor. Only needed as an annotation, so it stays behind
+    # TYPE_CHECKING and costs nothing at import time.
+    from importlib.resources.abc import Traversable
 
 PRESETS = ("base", "strict")
 
@@ -56,9 +59,7 @@ def _sources(preset: str) -> dict[str, str]:
     # Both presets are always copied: strict.toml extends base.toml by relative path, so shipping
     # only the selected one would leave a dangling reference.
     for name in PRESETS:
-        sources[f".matchory/ruff/{name}.toml"] = (ruff / f"{name}.toml").read_text(
-            encoding="utf-8"
-        )
+        sources[f".matchory/ruff/{name}.toml"] = (ruff / f"{name}.toml").read_text(encoding="utf-8")
 
     return sources
 

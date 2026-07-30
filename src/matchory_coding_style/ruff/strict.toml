@@ -55,8 +55,13 @@ extend-ignore = [
 
     # Formatter-owned docstring layout.
     "D200",
+
+    # D203 and D211 are mutually exclusive (blank line before a class docstring, or not), as are
+    # D212 and D213 (summary on the first line, or the second). Selecting `D` activates all four, so
+    # one of each pair has to go or they contradict each other. Keeping D211 and D212 means: no blank
+    # line before a class docstring, and the summary starts immediately after the opening quotes.
     "D203",
-    "D212",
+    "D213",
 
     # Binding to 0.0.0.0 is intentional inside a container.
     "S104",
@@ -70,6 +75,15 @@ extend-ignore = [
     # Private member access is how tests reach the thing they are testing.
     "SLF001",
 ]
+
+[lint.extend-per-file-ignores]
+# `extend-` so these add to the test exemptions in base.toml rather than replacing them.
+#
+# Writing to stdout is the entire purpose of a command-line entry point, so flake8-print's T20 rules
+# are noise there and every repository with a CLI would otherwise add this exemption itself.
+"**/cli.py" = ["T201", "T203"]
+"**/__main__.py" = ["T201", "T203"]
+"**/main.py" = ["T201", "T203"]
 
 [lint.mccabe]
 # Matches the cognitive-complexity threshold the PHPStan preset uses, so the two ecosystems agree on
