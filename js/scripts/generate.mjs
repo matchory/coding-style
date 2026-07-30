@@ -3,19 +3,17 @@
 /**
  * This file is part of matchory/coding-style, a Matchory project.
  *
- * Unauthorized copying of this file, via any medium, is strictly prohibited. Its contents are
- * strictly confidential and proprietary.
- *
- * @copyright © 2026 Matchory GmbH · All rights reserved
+ * @copyright © 2026 Matchory GmbH
+ * @license MIT
  */
 
 /**
  * Emits the JSON artefacts that repositories using oxlint's and oxfmt's rc-file format consume.
  *
- * Not every repository configures these tools in TypeScript. `matchory/ui`, for example, carries
- * `.oxlintrc.json` and `.oxfmtrc.json`, which cannot spread a JavaScript object. Rather than
- * forcing a config-format migration as the price of adopting the shared style, the same source
- * objects are serialised here and copied in by `matchory-coding-style sync`.
+ * Not every repository configures these tools in TypeScript. Some of ours carry `.oxlintrc.json`
+ * and `.oxfmtrc.json`, which cannot spread a JavaScript object. Rather than forcing a config-format
+ * migration as the price of adopting the shared style, the same source objects are serialised here
+ * and copied in by `matchory-coding-style sync`.
  *
  * The output is committed so that `sync` is a plain file copy with no dependency on this package's
  * own toolchain, and CI runs `--check` to prove the committed files still match the source.

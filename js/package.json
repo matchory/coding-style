@@ -2,7 +2,7 @@
   "name": "@matchory/coding-style",
   "version": "0.1.0",
   "description": "Shared code style configuration for Matchory projects: oxlint, oxfmt, ESLint and TypeScript presets.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": false,
   "type": "module",
   "repository": {
@@ -49,7 +49,8 @@
     "src",
     "generated",
     "bin",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "generate": "node scripts/generate.mjs",

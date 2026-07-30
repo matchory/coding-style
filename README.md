@@ -8,16 +8,20 @@ Edit configuration here. Never in a consumer.
 
 ## Why this exists
 
-Configuration was copied between repositories and then drifted. As of July 2026:
+Configuration was copied between repositories and then drifted. A survey across our repositories in
+July 2026 found, for the same organisation and the same conventions:
 
-| Drift                    | Detail                                                                             |
-|--------------------------|------------------------------------------------------------------------------------|
-| JS formatting            | `webapp` was 4-space/single-quote, `ui` 2-space/double-quote                        |
-| JS lint coverage         | `webapp` enforced ~73 oxlint rules, `ui` shipped an effectively empty rule set      |
-| JS config format         | `webapp` used `oxlint.config.ts`, `ui` used `.oxlintrc.json`                        |
-| Python line length       | `calliope` 100, `dagster` 88                                                       |
-| Python rule sets         | `calliope` ~46 rule groups, `dagster` 8                                            |
-| Python coverage          | `supplier-insights`, `platform` and `semantic_search` had no ruff config at all     |
+| Drift              | Detail                                                                          |
+|--------------------|---------------------------------------------------------------------------------|
+| JS formatting      | Two indentation widths and two quote styles across JavaScript repositories        |
+| JS lint coverage   | One repository enforced ~73 oxlint rules; another shipped an empty rule set       |
+| JS config format   | Some repositories used `oxlint.config.ts`, others `.oxlintrc.json`                |
+| Python line length | Two different limits in active services                                          |
+| Python rule sets   | One service selected ~46 ruff rule groups, another 8                             |
+| Python coverage    | Several services had no ruff configuration at all                                |
+
+None of this was anyone's fault. Copying a config file is the path of least resistance, and there was
+nothing to copy *from* that stayed current.
 
 ## Extend or sync
 
@@ -335,7 +339,7 @@ extend = ".matchory/ruff.toml"
 | Preset        | Contents                                                                      |
 |---------------|-------------------------------------------------------------------------------|
 | `base.toml`   | 10 rule groups. Sized to be adoptable in a repository with no config today.    |
-| `strict.toml` | Extends base with 30 more groups. Derived from what `calliope` already enforces. |
+| `strict.toml` | Extends base with 30 more groups. Derived from our strictest existing service.  |
 
 `sync` copies both presets plus a one-line selector, because `strict.toml` extends `base.toml` by
 relative path. Select the preset with `--preset`; `--check` verifies without writing.
@@ -409,17 +413,16 @@ load, the ruff presets resolve through a real ruff run, and the three `.editorco
 identical. Regenerate and commit rather than editing anything under `js/generated/` or
 `src/matchory_coding_style/data/`.
 
-## Adoption status
+## Adoption
 
-| Repository        | Ecosystem  | Status                                                     |
-|-------------------|------------|------------------------------------------------------------|
-| `webapp`          | PHP + JS   | Not yet. Will replace the local `@matchory/tooling` package. |
-| `ui`              | JS         | Not yet. Needs a reformat commit (2-space → 4-space).        |
-| `calliope`        | Python     | Not yet. Maps to `strict`.                                  |
-| `dagster`         | Python     | Not yet. Maps to `base`.                                    |
-| others            | —          | Not yet.                                                    |
+Adoption is tracked in the issue tracker rather than here, so it cannot go stale.
 
-`webapp`'s `resources/packages/tooling` stays in place until this package is proven in a smaller
-consumer. It additionally holds Vitest configuration, which is build tooling rather than code style
-and is heavily webapp-specific (route-manifest generation, Mapbox aliases, app path aliases); that
-part does not move here.
+Two notes for anyone migrating a repository:
+
+- A repository formatted at a different indentation or quote style needs a one-time reformat commit.
+  Land it separately from the version bump, or review becomes unreadable.
+- Vitest configuration deliberately does **not** live here. It is build tooling rather than code
+  style, and in practice it is heavily application-specific: route-manifest generation, module
+  aliases, dependency inlining. Keep it local.
+
+Run `verify` after wiring a repository up; it will tell you what is still pointing at local config.

@@ -3,10 +3,8 @@
 /**
  * This file is part of matchory/coding-style, a Matchory project.
  *
- * Unauthorized copying of this file, via any medium, is strictly prohibited.
- * Its contents are strictly confidential and proprietary.
- *
- * @copyright © 2026 Matchory GmbH · All rights reserved
+ * @copyright © 2026 Matchory GmbH
+ * @license MIT
  */
 
 declare(strict_types=1);

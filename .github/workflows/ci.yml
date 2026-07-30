@@ -23,6 +23,27 @@ jobs:
           diff -u .editorconfig js/generated/.editorconfig
           diff -u .editorconfig src/matchory_coding_style/data/editorconfig
 
+      # The npm tarball needs its own LICENSE: the canonical one sits at the repository root, and npm
+      # only picks up a licence file from the package directory.
+      - name: LICENSE mirror matches
+        run: diff -u LICENSE js/LICENSE
+
+      - name: Every manifest declares the same licence
+        run: |
+          status=0
+          php_license="$(python3 -c "import json;print(json.load(open('composer.json'))['license'])")"
+          npm_license="$(python3 -c "import json;print(json.load(open('js/package.json'))['license'])")"
+          py_license="$(grep -m1 '^license = ' pyproject.toml | cut -d'"' -f2)"
+
+          for pair in "composer.json:${php_license}" "js/package.json:${npm_license}" "pyproject.toml:${py_license}"; do
+            if [ "${pair##*:}" != 'MIT' ]; then
+              echo "::error::${pair%%:*} declares ${pair##*:}, expected MIT"
+              status=1
+            fi
+          done
+
+          exit "${status}"
+
   php:
     name: PHP presets
     runs-on: ubuntu-latest

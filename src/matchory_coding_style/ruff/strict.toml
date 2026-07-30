@@ -1,7 +1,7 @@
-# The target ruff configuration, derived from what `calliope` already enforces.
+# The target ruff configuration, derived from our strictest existing service.
 #
 # Extends `base.toml`, so only the additions appear here. Adopt it in a repository that is already
-# clean under the base; `calliope` is on it today.
+# clean under the base.
 #
 #     [tool.ruff]
 #     extend = ".matchory/ruff.toml"   # written by `matchory-coding-style sync --preset strict`

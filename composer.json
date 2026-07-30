@@ -2,7 +2,7 @@
     "name": "matchory/coding-style",
     "description": "Shared code style configuration for Matchory projects: Pint, PHPStan and Rector presets.",
     "type": "phpstan-extension",
-    "license": "proprietary",
+    "license": "MIT",
     "authors": [
         {
             "name": "Matchory GmbH",
