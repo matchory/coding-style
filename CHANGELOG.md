@@ -83,9 +83,11 @@ ecosystems, so a malicious version would run in our CI and on developer machines
   builds install with `--ignore-scripts`.
 - CodeQL (JavaScript, Python, Actions), dependency review with a copyleft denylist, and a weekly
   OpenSSF Scorecard run.
-- The Renovate base sets a five-day `minimumReleaseAge` cooldown. Most malicious releases are detected
-  and yanked within hours, so a cooldown neutralises that class of attack without anyone needing to be
-  watching at the right moment.
+- A five-day dependency cooldown, applied by `.github/dependabot.yml` across npm, Composer, pip and
+  GitHub Actions, with updates grouped per ecosystem. Most malicious releases are detected and yanked
+  within hours, so a cooldown neutralises that class of attack without anyone needing to be watching at
+  the right moment. Security updates are advisory-driven and unaffected. The Renovate presets express
+  the same policy for consumers on Renovate.
 
 `SECURITY.md` documents the controls, the verification commands, and the known gaps — including that
 Composer has no artefact provenance mechanism, so the PHP package's integrity rests on repository

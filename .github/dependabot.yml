@@ -1,0 +1,70 @@
+# Dependabot version updates, grouped per ecosystem so one upstream release does not arrive as three
+# pull requests.
+#
+# The five-day cooldown is a supply-chain control, not a convenience. Most malicious npm and PyPI
+# releases in recent memory were detected and yanked within hours, so waiting before adopting a new
+# version neutralises that class of attack without anyone needing to be watching at the right moment.
+# Security updates are unaffected: Dependabot security PRs are driven by advisories and ignore this.
+#
+# Layout note: this repository publishes three packages, and each ecosystem's manifest sits where its
+# packaging rules force it. composer.json and pyproject.toml are at the root; the npm package is in
+# `js/`. See the README.
+
+version: 2
+
+multi-ecosystem-groups:
+  # Everything that ends up in a published artefact or its lockfile.
+  packages:
+    schedule:
+      interval: weekly
+  # Kept separate because a workflow bump changes what runs in the release path, which deserves its own
+  # review rather than being batched with library updates.
+  github-actions:
+    schedule:
+      interval: weekly
+
+updates:
+  - package-ecosystem: npm
+    multi-ecosystem-group: packages
+    directory: /js
+    patterns:
+      - '*'
+    cooldown:
+      default-days: 5
+    labels:
+      - dependencies
+
+  - package-ecosystem: composer
+    multi-ecosystem-group: packages
+    directory: /
+    patterns:
+      - '*'
+    allow:
+      - dependency-type: all
+    cooldown:
+      default-days: 5
+    labels:
+      - dependencies
+
+  - package-ecosystem: pip
+    multi-ecosystem-group: packages
+    directory: /
+    patterns:
+      - '*'
+    cooldown:
+      default-days: 5
+    labels:
+      - dependencies
+
+  # Every action here is pinned to a full commit SHA, and a CI job fails the build if any is not.
+  # Dependabot understands SHA pins and bumps them with the version comment intact, which is the only
+  # sustainable way to keep pinned actions current.
+  - package-ecosystem: github-actions
+    multi-ecosystem-group: github-actions
+    directory: /
+    patterns:
+      - '*'
+    cooldown:
+      default-days: 5
+    labels:
+      - dependencies

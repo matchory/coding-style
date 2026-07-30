@@ -92,12 +92,19 @@ Enforced through GitHub settings rather than files:
 
 ### Consuming a compromised upstream
 
-The Renovate presets set a repository-wide `minimumReleaseAge` cooldown, so a dependency version stays
-unadopted for several days after publication. Most malicious npm and PyPI releases in recent memory
-were detected and yanked within hours; a cooldown converts that class of attack into a non-event
-without needing anyone to be paying attention at the right moment.
+`.github/dependabot.yml` sets a **five-day cooldown** on every ecosystem, so a dependency version stays
+unadopted for five days after publication. Most malicious npm and PyPI releases in recent memory were
+detected and yanked within hours; a cooldown converts that class of attack into a non-event without
+needing anyone to be paying attention at the right moment. Security updates are unaffected — those are
+advisory-driven and ignore the cooldown.
 
-Linters and formatters additionally never automerge, at any update type.
+Updates are grouped per ecosystem so one upstream release does not arrive as three pull requests, and
+GitHub Actions are grouped separately: a workflow bump changes what runs in the release path and
+deserves its own review.
+
+The Renovate presets this repository also ships (`default.json`, `renovate/*.json`) express the same
+policy for consumers who use Renovate. They are **not active here** — Renovate is not installed on the
+organisation, Dependabot is.
 
 ## Known gaps
 
