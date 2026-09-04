@@ -33,6 +33,11 @@ updates:
       default-days: 5
     labels:
       - dependencies
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
   - package-ecosystem: composer
     multi-ecosystem-group: packages
@@ -45,6 +50,11 @@ updates:
       default-days: 5
     labels:
       - dependencies
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
   - package-ecosystem: pip
     multi-ecosystem-group: packages
@@ -55,6 +65,11 @@ updates:
       default-days: 5
     labels:
       - dependencies
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
   # Every action here is pinned to a full commit SHA, and a CI job fails the build if any is not.
   # Dependabot understands SHA pins and bumps them with the version comment intact, which is the only
@@ -68,3 +83,8 @@ updates:
       default-days: 5
     labels:
       - dependencies
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - '*'
