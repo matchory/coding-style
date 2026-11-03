@@ -1,90 +1,102 @@
-# Dependabot version updates, grouped per ecosystem so one upstream release does not arrive as three
-# pull requests.
+# Follows the matchory supply chain baseline:
+# https://github.com/matchory/.github/blob/main/supply-chain/STANDARD.md
 #
-# The five-day cooldown is a supply-chain control, not a convenience. Most malicious npm and PyPI
-# releases in recent memory were detected and yanked within hours, so waiting before adopting a new
-# version neutralises that class of attack without anyone needing to be watching at the right moment.
-# Security updates are unaffected: Dependabot security PRs are driven by advisories and ignore this.
+#   - cooldown: a release must be 3 days old before Dependabot proposes it
+#     (does not delay security updates)
+#   - minor + patch updates arrive as ONE grouped PR per ecosystem
+#   - major updates are never grouped: one PR per dependency, reviewed on its own
+#   - security updates get their own group per ecosystem
 #
 # Layout note: this repository publishes three packages, and each ecosystem's manifest sits where its
 # packaging rules force it. composer.json and pyproject.toml are at the root; the npm package is in
 # `js/`. See the README.
-
 version: 2
 
-multi-ecosystem-groups:
-  # Everything that ends up in a published artefact or its lockfile.
-  packages:
-    schedule:
-      interval: weekly
-  # Kept separate because a workflow bump changes what runs in the release path, which deserves its own
-  # review rather than being batched with library updates.
-  github-actions:
-    schedule:
-      interval: weekly
-
 updates:
-  - package-ecosystem: npm
-    multi-ecosystem-group: packages
-    directory: /js
-    patterns:
-      - '*'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
     cooldown:
-      default-days: 5
-    labels:
-      - dependencies
+      default-days: 3
+      semver-major-days: 3
+      semver-minor-days: 3
+      semver-patch-days: 3
     groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
       security:
         applies-to: security-updates
-        patterns:
-          - '*'
+        patterns: ["*"]
+    labels: [dependencies, github-actions]
 
   - package-ecosystem: composer
-    multi-ecosystem-group: packages
     directory: /
-    patterns:
-      - '*'
-    allow:
-      - dependency-type: all
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
     cooldown:
-      default-days: 5
-    labels:
-      - dependencies
+      default-days: 3
+      semver-major-days: 3
+      semver-minor-days: 3
+      semver-patch-days: 3
     groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
       security:
         applies-to: security-updates
-        patterns:
-          - '*'
+        patterns: ["*"]
+    versioning-strategy: increase-if-necessary
+    labels: [dependencies, php]
+    allow:
+      - {dependency-type: all}
+
+  - package-ecosystem: npm
+    directory: /js
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
+    cooldown:
+      default-days: 3
+      semver-major-days: 3
+      semver-minor-days: 3
+      semver-patch-days: 3
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+    versioning-strategy: increase-if-necessary
+    labels: [dependencies, javascript]
 
   - package-ecosystem: pip
-    multi-ecosystem-group: packages
     directory: /
-    patterns:
-      - '*'
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Berlin
     cooldown:
-      default-days: 5
-    labels:
-      - dependencies
+      default-days: 3
+      semver-major-days: 3
+      semver-minor-days: 3
+      semver-patch-days: 3
     groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
       security:
         applies-to: security-updates
-        patterns:
-          - '*'
-
-  # Every action here is pinned to a full commit SHA, and a CI job fails the build if any is not.
-  # Dependabot understands SHA pins and bumps them with the version comment intact, which is the only
-  # sustainable way to keep pinned actions current.
-  - package-ecosystem: github-actions
-    multi-ecosystem-group: github-actions
-    directory: /
-    patterns:
-      - '*'
-    cooldown:
-      default-days: 5
-    labels:
-      - dependencies
-    groups:
-      security:
-        applies-to: security-updates
-        patterns:
-          - '*'
+        patterns: ["*"]
+    labels: [dependencies, python]
