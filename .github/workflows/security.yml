@@ -2,7 +2,8 @@ name: Security
 
 # Static analysis and supply-chain checks that are not part of the preset verification in ci.yml.
 #
-# Every action is pinned to a full commit SHA. CodeQL covers the JavaScript and Python sources; it has
+# Every action is pinned to a full commit SHA. CodeQL runs through the organisation's default setup
+# (security-extended), which rejects uploads from a workflow job, so there is no CodeQL job here. It has
 # no PHP analyser, so the PHP presets rely on PHPStan in ci.yml instead.
 
 on:
@@ -21,35 +22,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  codeql:
-    name: CodeQL (${{ matrix.language }})
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [javascript-typescript, python, actions]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Initialise
-        uses: github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
-        with:
-          languages: ${{ matrix.language }}
-          # security-and-quality is broader than the default security-extended and worth the extra
-          # runtime on a repository this small.
-          queries: security-and-quality
-
-      - name: Analyse
-        uses: github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
-        with:
-          category: /language:${{ matrix.language }}
-
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request'
